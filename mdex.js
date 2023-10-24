@@ -14,16 +14,16 @@
  * 
  * https://www.markdownguide.org/extended-syntax/ 🛠️🚧❗
  * Strikethrough ✅
- * Tables ❎
+ * Tables 🚧
  * Footnotes ✅
  * Heading IDs ✅
- * Definition Lists ❎
+ * Definition Lists ✅
  * Task Lists ❓
  * Emoji ❌
  * Highlight ✅
  * Subscript & Superscript ✅
  * Automatic URL Linking ✅ escape it using backslash instead of surrounding it with backticks!
- * Fenced Code Blocks ❓
+ * Fenced Code Blocks ✅
  * 
  * extended-extended features: 🛠️🚧
  * Underline ✅ use _
@@ -38,20 +38,46 @@ const tree_node = (type, value) =>
 	return { type : type, value: value, children : Array() };
 }
 
+const EMPTY_ARR = []; // do NOT touch this.
 const NOTE_ID_PREFIX = "_note:";
 const CONTAINER_NODE_TYPE = "_cont";
-const INDENTED_LINE = /^(?:(?:    )|\t)(.+)/;
-const RUBY_PAIR    = /(.+?)(?<!\\)(?:\\\\)*\((.+?)\)/g;
+const INDENTED_LINE     = /^(?:(?:\s{4})|\t)(.+)/;
+const RUBY_PAIR         = /(.+?)(?<!\\)(?:\\\\)*\((.+?)\)/g;
+const DL_DD             = /^:\s(.+)/;
+const TABLE_CAPTION     = /^\^(.+)/;
+const TABLE_LEFT_ALIGN  = ":<";
+const TABLE_RIGHT_ALIGN = ">:";
+const TABLE_HEADER      = "#";
 
-const LINE_MATCH_STRINGS = [
-	["hr",         /^(?:-{3,}|_{3,}|\*{3,})$/],
-	["ol",         /^(\d+)\.\s(.+)/],
-	["ul",         /^[-\*+]\s(.+)/],
-	["h",          /^(#{1,4})\s(.+?)(?:\s#(.*))?$/],
-	["blockquote", /^>\s(.+)/],
-	["note_desc",  /^\[\^(.+?)\s*(?:"(.+)")?\]:\s(.+)/],
-	["codeblock",  /^```$/],
-];
+const LINE_MATCH_STRINGS = {
+	hr : /^(?:-{3,}|_{3,}|\*{3,})$/,
+	ol : /^(\d+)\.\s(.+)/,
+	ul : /^[-\*+]\s(.+)/,
+	dl : /^\/(.+)/,
+	h  : /^(#{1,4})\s(.+?)(?:\s#(.*))?$/,
+	blockquote : /^>\s(.+)/,
+	note_desc  : /^\[\^(.+?)\s*(?:"(.+)")?\]:\s(.+)/,
+	codeblock  : /^`{3,}$/,
+	table      : /^\|(.+)\|$/,
+};
+
+// pointers are massively underrated in intepreted language!1!!
+// metatables should be a feature in every intepreted language!!1!
+const CHAR_TO_LINE_REGEX_MAP = {};
+{
+	const map = (char, tag) => 
+		(CHAR_TO_LINE_REGEX_MAP[char] || (CHAR_TO_LINE_REGEX_MAP[char] = [])).push(tag);
+
+	for (const c of ['-', '_', '*']) map(c, "hr");
+	for (let i = 0; i <= 9; ++i) map(i + '', "ol");
+	for (const c of ['-', '*', '+']) map(c, "ul");
+	map('/', "dl");
+	map('#', "h");
+	map('>', "blockquote");
+	map('[', "note_desc");
+	map('`', "codeblock");
+	map('|', "table");
+}
 
 
 const CHAR_TO_REGEX_MAP = {};
@@ -105,7 +131,7 @@ const is_last_char_escaped = (str) => is_escaped(str, str.length - 1);
 const remove_escapes = (line) =>
 {
 	let i;
-	while ((i = line.indexOf('\\', i)) > 0)
+	while ((i = line.indexOf('\\', i)) != -1)
 	{
 		let backslash_count = 1;
 
@@ -161,8 +187,7 @@ const inner_parse_node = (line, node) =>
 	outer_loop:
 	for (let i = 0; i < line_length; ++i)
 	{
-		const c = line[i];
-		const regex_that_start_with_c = CHAR_TO_REGEX_MAP[c];
+		const regex_that_start_with_c = CHAR_TO_REGEX_MAP[line[i]];
 
 		if (!regex_that_start_with_c || is_escaped(line, i))
 			continue;
@@ -249,67 +274,125 @@ export const to_tree = (str) =>
 	const arr_length = arr.length;
 	for (let i = 0; i < arr_length;)
 	{
-		let line = arr[i];
-		let node = tree_node();
+		const line = arr[i];
+		const node = tree_node();
 
 		check_match_strings:
-		for (const [type, match_string] of LINE_MATCH_STRINGS)
-		if (regex_match_result = line.match(match_string))
+		for (const type of CHAR_TO_LINE_REGEX_MAP[line[0]] || EMPTY_ARR)
 		{
-			node.type = type;
-			switch (type)
+			const match_string = LINE_MATCH_STRINGS[type];
+			if (regex_match_result = line.match(match_string))
 			{
-			default: console.warn(`UNIMPLEMENTED ${type} TYPE!\n trace: ${console.trace()}`); break;
-			case "codeblock":
-				let j = i;
-				while (++j < arr_length && !arr[j].match(match_string));
-				node.value = arr.slice(i + 1, j).join("\n");
-				i = j + 1;
-				break check_match_strings;
-			case "blockquote":
-				do
+				node.type = type;
+				switch (type)
 				{
-					node.children.push(parse_optimize_node(regex_match_result[1], tree_node("br_after")));
-				} while (++i < arr_length && (regex_match_result = arr[i].match(match_string)))
-				break;
-			case "ol":
-			case "ul":
-				const is_ol = type == "ol";
-				node.value = is_ol && regex_match_result[1];
-				do
-				{
-					const item_node = parse_optimize_node(regex_match_result[1 + is_ol], tree_node("li"));
-					node.children.push(item_node);
+				default: console.warn(`UNIMPLEMENTED ${type} TYPE!\n trace: ${console.trace()}`); node.type = undefined; break check_match_strings;
+				case "table":
+					if (is_last_char_escaped(arr[i])) { node.type = undefined; break check_match_strings; };
 
-					let text_under_element = Array();
+					do
+					{
+						let row = regex_match_result[1] + "|";
+						let tr_node = tree_node("tr");
+						let j;
+						let last = -1;
+						while ((j = row.indexOf('|', j)) >= 0)
+						{
+							if (is_escaped(row, j))
+							{
+								++j;
+								continue;
+							}
+
+							let this_part = row.substring(last + 1, j);
+							let node = tree_node("td");
+
+							if (this_part.startsWith(TABLE_LEFT_ALIGN))
+							{
+								node.align = "left";
+								this_part = this_part.substring(TABLE_LEFT_ALIGN.length);
+							} 
+							else if (this_part.endsWith(TABLE_RIGHT_ALIGN) && !is_escaped(this_part, this_part.length))
+							{
+								node.align = "right";
+								this_part = this_part.substring(0, this_part.length - TABLE_RIGHT_ALIGN.length);
+							}
+							else node.align = "center";
+
+							if (this_part.startsWith(TABLE_HEADER))
+							{
+								node.type = "th";
+								this_part = this_part.substring(1);
+							}
+							
+							tr_node.children.push(parse_optimize_node(this_part.trim(), node));
+
+							last = j++;
+						}
+
+						node.children.push(tr_node);
+
+					} while (++i < arr_length && (regex_match_result = arr[i].match(match_string)));
+
+					break check_match_strings;
+				case "dl":
+					do
+					{
+						node.children.push(parse_optimize_node(regex_match_result[1], tree_node("dt")));
+
+						while (++i < arr_length && (regex_match_result = arr[i].match(DL_DD)))
+							node.children.push(parse_optimize_node(regex_match_result[1], tree_node("dd")));
+					} while (i < arr_length && (regex_match_result = arr[i].match(match_string)));
+					break check_match_strings;
+				case "codeblock":
+					let j = i;
+					while (++j < arr_length && !(arr[j] == arr[i]));
+					node.value = arr.slice(i + 1, j).join("\n");
+					i = j + 1;
+					break check_match_strings;
+				case "blockquote":
+					do
+					{
+						node.children.push(parse_optimize_node(regex_match_result[1], tree_node("br_after")));
+					} while (++i < arr_length && (regex_match_result = arr[i].match(match_string)));
+					break check_match_strings;
+				case "ol":
+				case "ul":
+					const is_ol = type == "ol";
+					node.value = is_ol && regex_match_result[1];
+					do
+					{
+						const item_node = parse_optimize_node(regex_match_result[1 + is_ol], tree_node("li"));
+						node.children.push(item_node);
+
+						let text_under_element = Array();
+						let indented_match;
+						while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
+							text_under_element.push(indented_match[1]);
+						if (text_under_element.length > 0) item_node.under_element = to_tree(text_under_element.join("\n"));
+					} while (i < arr_length && (regex_match_result = arr[i].match(match_string)))
+					break check_match_strings;
+				case "note_desc":
+					node.id = regex_match_result[1];
+					node.children.push(regex_match_result[2] ? parse_optimize_node(regex_match_result[2] + ": ", tree_node("text")) : tree_node("text", regex_match_result[1] + ": "));
+					node.children.push(parse_optimize_node(regex_match_result[3], tree_node("br_after")));
+
 					let indented_match;
 					while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
-						text_under_element.push(indented_match[1]);
-					if (text_under_element.length > 0) item_node.under_element = to_tree(text_under_element.join("\n"));
-				} while (i < arr.length && (regex_match_result = arr[i].match(match_string)))
-				break check_match_strings;
-			case "note_desc":
-				node.id = regex_match_result[1];
-				node.children.push(regex_match_result[2] ? parse_optimize_node(regex_match_result[2] + ": ", tree_node("text")) : tree_node("text", regex_match_result[1] + ": "));
-				node.children.push(parse_optimize_node(regex_match_result[3], tree_node("br_after")));
+						node.children.push(parse_optimize_node(indented_match[1], tree_node("br_after")));
 
-				let indented_match;
-				while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
-					node.children.push(parse_optimize_node(indented_match[1], tree_node("br_after")));
-
+					break check_match_strings;
+				case "h":
+					node.type += regex_match_result[1].length;
+					parse_optimize_node(regex_match_result[2], node);
+					if (regex_match_result[3]) node.id = regex_match_result[3];
+					// fall through
+				case "hr": ++i;
+				}
 				break;
-			case "h":
-				node.type += regex_match_result[1].length;
-				parse_optimize_node(regex_match_result[2], node);
-				if (regex_match_result[3]) node.id = regex_match_result[3];
-				// fall through
-			case "hr": ++i;
 			}
-			break;
 		}
 
-
-		// if it didn't match anything.
 		if (!node.type)
 		{
 			node.type = "br_after";
@@ -320,7 +403,7 @@ export const to_tree = (str) =>
 	}
 
 	return tree;
-}
+};
 
 const inner_render_node_default = (node, parent) =>
 	node.value ? 
@@ -416,14 +499,14 @@ const inner_render_node = (node, parent) =>
 	// do nothing
 	case "hr":
 	}
-}
+};
 
 class mock_element
 {
 	constructor() { this.arr = Array(); }
 	appendChild(element) { this.arr.push(element); }
 	push(element) { this.arr.push(element) }
-}
+};
 
 export const render = (tree) =>
 {
@@ -475,8 +558,19 @@ export const render = (tree) =>
 			inner_render_node(node, p);
 			
 			children_nodes.push(p);
+			break;
+		case "dl":
+			let dl = document.createElement("dl");
+			for (const child of node.children)
+			{
+				let element = document.createElement(child.type);
+				inner_render_node(child, element);
+				dl.appendChild(element);
+			}
+			children_nodes.push(dl);
 		}
+		
 	}
 
 	return children_nodes.arr;
-}
+};
