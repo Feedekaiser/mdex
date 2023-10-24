@@ -28,13 +28,14 @@
  * extended-extended features: 🛠️🚧
  * Underline ✅ use _
  * Spoiler ✅ use |
- * Furigana (<ruby>) ✅
+ * Furigana (<ruby>) ✅ use {明日(あす)} or {明(あ)日(す)}. {振(ふ)}り{仮(が)名(な)} is amazing! 💯
  * Math formula ❎
  */
+
 import { stringify } from "./stringify.js";
 const tree_node = (type, value) => 
 {
-	return {type : type, value: value, children : Array()};
+	return { type : type, value: value, children : Array() };
 }
 
 const NOTE_ID_PREFIX = "_note:";
@@ -57,15 +58,15 @@ const CHAR_TO_REGEX_MAP = {};
 for (const [type, regex] of [
 	["img",     /!(?:\[(.+)\])?\((.+?)\s*(?:"(.+)")?\)(?:{(?:(\d+)?(?:x(\d+))?)?(?:\s*"(.+)")?})?/],
 	["a",       /\[(.+)\]\((.+?)\s*(?:"(.+)")?\)/],
-	["del",     /~((?:.+?)(?<!\\)(?:\\\\)*)~/],
-	["u",       /_((?:.+?)(?<!\\)(?:\\\\)*)_/],
-	["spoiler", /\|((?:.+?)(?<!\\)(?:\\\\)*)\|/],
-	["strong",  /\^((?:.+?)(?<!\\)(?:\\\\)*)\^/],
-	["em",      /\*((?:.+?)(?<!\\)(?:\\\\)*)\*/],
-	["sup",     /=((?:.+?)(?<!\\)(?:\\\\)*)=/],
-	["sub",     /-((?:.+?)(?<!\\)(?:\\\\)*)-/],
-	["mark",    /&((?:.+?)(?<!\\)(?:\\\\)*)&/],
-	["ruby",    /{(.+?)}/],
+	["del",     /~(.+?)~/, true],
+	["u",       /_(.+?)_/, true],
+	["spoiler", /\|(.+?)\|/, true],
+	["strong",  /\^(.+?)\^/, true],
+	["em",      /\*(.+?)\*/, true],
+	["sup",     /=(.+?)=/, true],
+	["sub",     /-(.+?)-/, true],
+	["mark",    /&(.+?)&/, true],
+	["ruby",    /{(.+?)}/, true],
 	["note",    /\[\^(.+?)\s*(?:"(.+)")?\]/],
 	["link",    /https?:\/\/\S+\.\S\S+/],
 	["code",    /`(.+?)`/],
@@ -92,32 +93,36 @@ const is_escaped = (str, idx) =>
 };
 
 /**
+ * @param {string} str 
+ * @returns {boolean}
+ */
+const is_last_char_escaped = (str) => is_escaped(str, str.length - 1);	
+
+/**
  * @param {string} line 
  * @returns {string}
  */
-const remove_escapes = (line) => 
+const remove_escapes = (line) =>
 {
-	let backslash_count = 0;
-
-	for (let i = 0; i < line.length; ++i)
+	let i;
+	while ((i = line.indexOf('\\', i)) > 0)
 	{
-		let is_backslash = line[i] == '\\';
-		backslash_count += is_backslash;
+		let backslash_count = 1;
 
-		if (backslash_count > 0 && !is_backslash)
-		{
-			const backslash_remained = Math.floor(backslash_count * 0.5);
-			line = 
-				line.substring(0, i - backslash_count) +
-				"\\".repeat(backslash_remained) +
-				line.substring(i);
+		while (line[++i] == '\\')
+			++backslash_count;
 
-			i -= backslash_remained;
-			backslash_count = 0;
-		}
+		const backslash_remained = Math.floor(backslash_count * 0.5);
+
+		line = 
+			line.substring(0, i - backslash_count) +
+			"\\".repeat(backslash_remained) +
+			line.substring(i);
+
+		i -= backslash_remained;
 	}
 
-	return backslash_count > 0 ? line.substring(0, line.length - backslash_count * 0.5) : line;
+	return line;
 };
 
 /**
@@ -127,19 +132,16 @@ const remove_escapes = (line) =>
 const optimize_node = (master_node) => 
 {
 	let master_children = master_node.children;
+	let node = master_children.pop();
+
+	while (node && node.type == CONTAINER_NODE_TYPE && !node.value)
 	{
-		let node = master_children.pop();
+		for (let i = 0; i < node.children.length - 1; ++i)
+			master_children.push(node.children[i]);
 
-		while (node && node.type == CONTAINER_NODE_TYPE)
-		{
-			for (let i = 0; i < node.children.length - 1; ++i)
-				master_children.push(node.children[i]);
-
-			node = node.children.pop();
-		}
-		node && master_children.push(node);
+		node = node.children.pop();
 	}
-
+	node && master_children.push(node);
 	return master_node;
 };
 
@@ -162,67 +164,70 @@ const inner_parse_node = (line, node) =>
 		const c = line[i];
 		const regex_that_start_with_c = CHAR_TO_REGEX_MAP[c];
 
-		if (regex_that_start_with_c && !is_escaped(line, i))
-			for (const [type, regex] of regex_that_start_with_c)
-				if (regex_match_result = line.substring(i).match(regex))
+		if (!regex_that_start_with_c || is_escaped(line, i))
+			continue;
+
+		for (const [type, regex, check_lastchar_escaped] of regex_that_start_with_c)
+			if ((regex_match_result = line.substring(i).match(regex)) && 
+				!(check_lastchar_escaped && is_last_char_escaped(regex_match_result[0])))
+			{
+				is_pure_text = false;
+
+				let children = node.children;
+
+				i > 0 && children.push(inner_parse_node(line.substring(0, i), tree_node("text")));
+
 				{
-					is_pure_text = false;
+					const text_node = tree_node(type); // please suggest me a better variable name :D
 
-					let children = node.children;
-
-					i > 0 && children.push(inner_parse_node(line.substring(0, i), tree_node("text")));
-
+					switch (type)
 					{
-						const text_node = tree_node(type); // please suggest me a better variable name :D
+					case "ruby":
+						const pairs = [];
 
-						switch (type)
+						for (const pair of regex_match_result[1].matchAll(RUBY_PAIR))
 						{
-						case "ruby":
-							const pairs = [];
-
-							for (const pair of regex_match_result[1].matchAll(RUBY_PAIR))
-							{
-								const base_node = parse_optimize_node(pair[1], tree_node("text"));
-								base_node.rt = parse_optimize_node(pair[2], tree_node("text"));
-								pairs.push(base_node);
-							}
-							if (pairs.length == 0)
-							{
-								text_node.type = "text";
-								text_node.value = regex_match_result[1];
-								break;
-							}
-							text_node.pairs = pairs;
-							break;
-						case "note":
-							text_node.id = regex_match_result[1];
-							if (regex_match_result[2])
-							{
-								parse_optimize_node(regex_match_result[2], text_node);
-								break;
-							}
-						case "code": text_node.value = regex_match_result[1]; break; // code cannot nest other controls.
-						case "link": text_node.type = "a"; text_node.link = regex_match_result[0]; text_node.value = regex_match_result[0]; break;
-						case "img":
-							text_node.alt = regex_match_result[1];
-							text_node.width = regex_match_result[4];
-							text_node.height = regex_match_result[5];
-							if (regex_match_result[6]) 
-								text_node.figcaption = parse_optimize_node(regex_match_result[6], tree_node("figcaption"));
-						case "a": 
-							text_node.link = regex_match_result[2];
-							text_node.hover = regex_match_result[3];
-							if (regex_that_start_with_c == "img") break;
-						default: inner_parse_node(regex_match_result[1], text_node);
+							const base_node = parse_optimize_node(pair[1], tree_node("text"));
+							base_node.rt = parse_optimize_node(pair[2], tree_node("text"));
+							pairs.push(base_node);
 						}
-						children.push(text_node);
+						if (pairs.length == 0)
+						{
+							text_node.type = "text";
+							text_node.value = regex_match_result[1];
+							break;
+						}
+						text_node.pairs = pairs;
+						break;
+					case "note":
+						text_node.id = regex_match_result[1];
+						if (regex_match_result[2])
+						{
+							parse_optimize_node(regex_match_result[2], text_node);
+							break;
+						}
+					case "code": text_node.value = regex_match_result[1]; break; // code cannot nest other controls.
+					case "link": text_node.type = "a"; text_node.link = regex_match_result[0]; text_node.value = regex_match_result[0]; break;
+					case "img":
+						text_node.alt = regex_match_result[1];
+						text_node.width = regex_match_result[4];
+						text_node.height = regex_match_result[5];
+						if (regex_match_result[6]) 
+							text_node.figcaption = parse_optimize_node(regex_match_result[6], tree_node("figcaption"));
+					case "a": 
+						text_node.link = regex_match_result[2];
+						text_node.hover = regex_match_result[3];
+						if (regex_that_start_with_c == "img") break;
+					default: inner_parse_node(regex_match_result[1], text_node);
 					}
-
-					let index_match_end = i + regex_match_result[0].length;
-					index_match_end < line_length && children.push(inner_parse_node(line.substring(index_match_end), tree_node(CONTAINER_NODE_TYPE)));
-
-					break outer_loop;
+					children.push(text_node);
 				}
+
+				let index_match_end = i + regex_match_result[0].length;
+				index_match_end < line_length && children.push(inner_parse_node(line.substring(index_match_end), tree_node(CONTAINER_NODE_TYPE)));
+
+				break outer_loop;
+			}
 	}
 
 	if (is_pure_text)
@@ -249,59 +254,60 @@ export const to_tree = (str) =>
 
 		check_match_strings:
 		for (const [type, match_string] of LINE_MATCH_STRINGS)
-			if (regex_match_result = line.match(match_string))
+		if (regex_match_result = line.match(match_string))
+		{
+			node.type = type;
+			switch (type)
 			{
-				node.type = type;
-				switch (type)
+			default: console.warn(`UNIMPLEMENTED ${type} TYPE!\n trace: ${console.trace()}`); break;
+			case "codeblock":
+				let j = i;
+				while (++j < arr_length && !arr[j].match(match_string));
+				node.value = arr.slice(i + 1, j).join("\n");
+				i = j + 1;
+				break check_match_strings;
+			case "blockquote":
+				do
 				{
-				default: console.warn(`UNIMPLEMENTED ${type} TYPE!\n trace: ${console.trace()}`); break;
-				case "codeblock":
-					let j = i;
-					while (++j < arr_length && !arr[j].match(match_string));
-					node.value = arr.slice(i + 1, j).join("\n");
-					i = j + 1;
-					break check_match_strings;
-				case "blockquote":
-					do
-					{
-						node.children.push(parse_optimize_node(regex_match_result[1], tree_node("br_after")));
-					} while (++i < arr_length && (regex_match_result = arr[i].match(match_string)))
-					break;
-				case "ol":
-				case "ul":
-					const is_ol = type == "ol";
-					node.value = is_ol && regex_match_result[1];
-					do
-					{
-						const item_node = parse_optimize_node(regex_match_result[1 + is_ol], tree_node("li"));
-						node.children.push(item_node);
+					node.children.push(parse_optimize_node(regex_match_result[1], tree_node("br_after")));
+				} while (++i < arr_length && (regex_match_result = arr[i].match(match_string)))
+				break;
+			case "ol":
+			case "ul":
+				const is_ol = type == "ol";
+				node.value = is_ol && regex_match_result[1];
+				do
+				{
+					const item_node = parse_optimize_node(regex_match_result[1 + is_ol], tree_node("li"));
+					node.children.push(item_node);
 
-						let text_under_element = Array();
-						let indented_match;
-						while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
-							text_under_element.push(indented_match[1]);
-						if (text_under_element.length > 0) item_node.under_element = to_tree(text_under_element.join("\n"));
-					} while (i < arr.length && (regex_match_result = arr[i].match(match_string)))
-					break check_match_strings;
-				case "note_desc":
-					node.id = regex_match_result[1];
-					node.children.push(regex_match_result[2] ? parse_optimize_node(regex_match_result[2] + ": ", tree_node("text")) : tree_node("text", regex_match_result[1] + ": "));
-					node.children.push(parse_optimize_node(regex_match_result[3], tree_node("br_after")));
-
+					let text_under_element = Array();
 					let indented_match;
 					while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
-						node.children.push(parse_optimize_node(indented_match[1], tree_node("br_after")));
+						text_under_element.push(indented_match[1]);
+					if (text_under_element.length > 0) item_node.under_element = to_tree(text_under_element.join("\n"));
+				} while (i < arr.length && (regex_match_result = arr[i].match(match_string)))
+				break check_match_strings;
+			case "note_desc":
+				node.id = regex_match_result[1];
+				node.children.push(regex_match_result[2] ? parse_optimize_node(regex_match_result[2] + ": ", tree_node("text")) : tree_node("text", regex_match_result[1] + ": "));
+				node.children.push(parse_optimize_node(regex_match_result[3], tree_node("br_after")));
 
-					break;
-				case "h":
-					node.type += regex_match_result[1].length;
-					parse_optimize_node(regex_match_result[2], node);
-					if (regex_match_result[3]) node.id = regex_match_result[3];
-					// fall through
-				case "hr": ++i;
-				}
+				let indented_match;
+				while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
+					node.children.push(parse_optimize_node(indented_match[1], tree_node("br_after")));
+
 				break;
+			case "h":
+				node.type += regex_match_result[1].length;
+				parse_optimize_node(regex_match_result[2], node);
+				if (regex_match_result[3]) node.id = regex_match_result[3];
+				// fall through
+			case "hr": ++i;
 			}
+			break;
+		}
+
 
 		// if it didn't match anything.
 		if (!node.type)
