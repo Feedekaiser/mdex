@@ -331,6 +331,9 @@ export const to_tree = (str) =>
 
 					} while (++i < arr_length && (regex_match_result = arr[i].match(match_string)));
 
+					if (i < arr_length && (regex_match_result = arr[i++].match(TABLE_CAPTION)))
+						node.caption = parse_optimize_node(regex_match_result[1], tree_node("caption"));
+					
 					break check_match_strings;
 				case "dl":
 					do
@@ -442,6 +445,7 @@ const inner_render_node = (node, parent) =>
 	case "tr":
 	case "td":
 	case "th":
+	case "caption":
 	case "a":
 	case "img":
 	case "del":
@@ -560,6 +564,9 @@ export const render = (tree) =>
 			// implement as switch later if changes.
 			if (type == "ol" && node.value != "1")
 				list.start = node.value;
+			
+			if (type == "table" && node.caption)
+				inner_render_node(node.caption, list);
 		}
 	}
 
