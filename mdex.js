@@ -14,7 +14,7 @@
  * 
  * https://www.markdownguide.org/extended-syntax/ 🛠️🚧❗
  * Strikethrough ✅
- * Tables 🚧
+ * Tables ✅
  * Footnotes ✅
  * Heading IDs ✅
  * Definition Lists ✅
@@ -32,7 +32,6 @@
  * Math formula ❎
  */
 
-import { stringify } from "./stringify.js";
 const tree_node = (type, value) => 
 {
 	return { type : type, value: value, children : Array() };
@@ -48,6 +47,7 @@ const TABLE_CAPTION     = /^\^(.+)/;
 const TABLE_LEFT_ALIGN  = ":<";
 const TABLE_RIGHT_ALIGN = ">:";
 const TABLE_HEADER      = "#";
+const TABLE_MERGE_MATCH = /^{(?:(\d+)?(?:x(\d+))?)?}(.+)/;
 
 const LINE_MATCH_STRINGS = {
 	hr : /^(?:-{3,}|_{3,}|\*{3,})$/,
@@ -58,7 +58,7 @@ const LINE_MATCH_STRINGS = {
 	blockquote : /^>\s(.+)/,
 	note_desc  : /^\[\^(.+?)\s*(?:"(.+)")?\]:\s(.+)/,
 	codeblock  : /^`{3,}$/,
-	table      : /^\|(.+)\|$/,
+	table      : /^\|(.+)\|/,
 };
 
 // pointers are massively underrated in intepreted language!1!!
@@ -302,37 +302,47 @@ export const to_tree = (str) =>
 							}
 
 							let this_part = row.substring(last + 1, j);
-							let node = tree_node("td");
+							let data_node = tree_node("td");
 
 							if (this_part.startsWith(TABLE_LEFT_ALIGN))
 							{
-								node.align = "left";
+								data_node.align = "left";
 								this_part = this_part.substring(TABLE_LEFT_ALIGN.length);
 							} 
 							else if (this_part.endsWith(TABLE_RIGHT_ALIGN) && !is_escaped(this_part, this_part.length))
 							{
-								node.align = "right";
+								data_node.align = "right";
 								this_part = this_part.substring(0, this_part.length - TABLE_RIGHT_ALIGN.length);
 							}
-							else node.align = "center";
+							else data_node.align = "center";
 
 							if (this_part.startsWith(TABLE_HEADER))
 							{
-								node.type = "th";
+								data_node.type = "th";
 								this_part = this_part.substring(1);
 							}
-							
-							tr_node.children.push(parse_optimize_node(this_part.trim(), node));
+
+							if (regex_match_result = this_part.match(TABLE_MERGE_MATCH))
+							{
+								data_node.colspan = regex_match_result[1] || "1";
+								data_node.rowspan = regex_match_result[2] || "1";
+								this_part = regex_match_result[3];
+							}
+							let trimmed = this_part.trim();
+							if (trimmed != "")
+								tr_node.children.push(parse_optimize_node(trimmed, data_node));
 
 							last = j++;
 						}
-
 						node.children.push(tr_node);
-
 					} while (++i < arr_length && (regex_match_result = arr[i].match(match_string)));
 
-					if (i < arr_length && (regex_match_result = arr[i++].match(TABLE_CAPTION)))
+					if (i < arr_length && (regex_match_result = arr[i].match(TABLE_CAPTION)))
+					{
+						++i;
 						node.caption = parse_optimize_node(regex_match_result[1], tree_node("caption"));
+					}
+
 					
 					break check_match_strings;
 				case "dl":
@@ -479,6 +489,8 @@ const inner_render_node = (node, parent) =>
 		case "td":
 		case "th":
 			element.align = node.align;
+			if (node.rowspan) element.rowSpan = node.rowspan;
+			if (node.colspan) element.colSpan = node.colspan;
 		}
 	default:
 		inner_render_node_default(node, append_text_to);
