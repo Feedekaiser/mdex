@@ -14,7 +14,7 @@
  * 
  * https://www.markdownguide.org/extended-syntax/ 🛠️🚧❗
  * Strikethrough ✅
- * Tables 🚧
+ * Tables ✅
  * Footnotes ✅
  * Heading IDs ✅
  * Definition Lists ✅
@@ -32,7 +32,6 @@
  * Math formula ❎
  */
 
-import { stringify } from "./stringify.js";
 const tree_node = (type, value) => 
 {
 	return { type : type, value: value, children : Array() };
@@ -48,6 +47,7 @@ const TABLE_CAPTION     = /^\^(.+)/;
 const TABLE_LEFT_ALIGN  = ":<";
 const TABLE_RIGHT_ALIGN = ">:";
 const TABLE_HEADER      = "#";
+const TABLE_MERGE_MATCH = /^{(?:(\d+)?(?:x(\d+))?)?}(.+)/;
 
 const LINE_MATCH_STRINGS = {
 	hr : /^(?:-{3,}|_{3,}|\*{3,})$/,
@@ -58,7 +58,7 @@ const LINE_MATCH_STRINGS = {
 	blockquote : /^>\s(.+)/,
 	note_desc  : /^\[\^(.+?)\s*(?:"(.+)")?\]:\s(.+)/,
 	codeblock  : /^`{3,}$/,
-	table      : /^\|(.+)\|$/,
+	table      : /^\|(.+)\|/,
 };
 
 // pointers are massively underrated in intepreted language!1!!
@@ -178,7 +178,7 @@ const parse_optimize_node = (line, node) => optimize_node(inner_parse_node(line,
  * @param {string} line the line to be changed into a tree.
  * @return {Array} 
  */
-const inner_parse_node = (line, node) => 
+const inner_parse_node = (line, node = tree_node("text")) => 
 {
 	const line_length = line.length;
 	let is_pure_text = true;
@@ -200,7 +200,7 @@ const inner_parse_node = (line, node) =>
 
 				let children = node.children;
 
-				i > 0 && children.push(inner_parse_node(line.substring(0, i), tree_node("text")));
+				i > 0 && children.push(inner_parse_node(line.substring(0, i)));
 
 				{
 					const text_node = tree_node(type); // please suggest me a better variable name :D
@@ -208,21 +208,18 @@ const inner_parse_node = (line, node) =>
 					switch (type)
 					{
 					case "ruby":
-						const pairs = [];
-
 						for (const pair of regex_match_result[1].matchAll(RUBY_PAIR))
 						{
-							const base_node = parse_optimize_node(pair[1], tree_node("text"));
-							base_node.rt = parse_optimize_node(pair[2], tree_node("text"));
-							pairs.push(base_node);
+							const base_node = parse_optimize_node(pair[1]);
+							base_node.rt = parse_optimize_node(pair[2]);
+							text_node.children.push(base_node);
 						}
-						if (pairs.length == 0)
+						if (text_node.children.length == 0)
 						{
 							text_node.type = "text";
 							text_node.value = regex_match_result[1];
 							break;
 						}
-						text_node.pairs = pairs;
 						break;
 					case "note":
 						text_node.id = regex_match_result[1];
@@ -305,35 +302,48 @@ export const to_tree = (str) =>
 							}
 
 							let this_part = row.substring(last + 1, j);
-							let node = tree_node("td");
+							let data_node = tree_node("td");
 
 							if (this_part.startsWith(TABLE_LEFT_ALIGN))
 							{
-								node.align = "left";
+								data_node.align = "left";
 								this_part = this_part.substring(TABLE_LEFT_ALIGN.length);
 							} 
 							else if (this_part.endsWith(TABLE_RIGHT_ALIGN) && !is_escaped(this_part, this_part.length))
 							{
-								node.align = "right";
+								data_node.align = "right";
 								this_part = this_part.substring(0, this_part.length - TABLE_RIGHT_ALIGN.length);
 							}
-							else node.align = "center";
+							else data_node.align = "center";
 
 							if (this_part.startsWith(TABLE_HEADER))
 							{
-								node.type = "th";
+								data_node.type = "th";
 								this_part = this_part.substring(1);
 							}
-							
-							tr_node.children.push(parse_optimize_node(this_part.trim(), node));
+
+							if (regex_match_result = this_part.match(TABLE_MERGE_MATCH))
+							{
+								data_node.colspan = regex_match_result[1] || "1";
+								data_node.rowspan = regex_match_result[2] || "1";
+								this_part = regex_match_result[3];
+							}
+							let trimmed = this_part.trim();
+							if (trimmed != "")
+								tr_node.children.push(parse_optimize_node(trimmed, data_node));
 
 							last = j++;
 						}
-
 						node.children.push(tr_node);
-
 					} while (++i < arr_length && (regex_match_result = arr[i].match(match_string)));
 
+					if (i < arr_length && (regex_match_result = arr[i].match(TABLE_CAPTION)))
+					{
+						++i;
+						node.caption = parse_optimize_node(regex_match_result[1], tree_node("caption"));
+					}
+
+					
 					break check_match_strings;
 				case "dl":
 					do
@@ -374,7 +384,7 @@ export const to_tree = (str) =>
 					break check_match_strings;
 				case "note_desc":
 					node.id = regex_match_result[1];
-					node.children.push(regex_match_result[2] ? parse_optimize_node(regex_match_result[2] + ": ", tree_node("text")) : tree_node("text", regex_match_result[1] + ": "));
+					node.children.push(regex_match_result[2] ? parse_optimize_node(regex_match_result[2] + ": ") : tree_node("text", regex_match_result[1] + ": "));
 					node.children.push(parse_optimize_node(regex_match_result[3], tree_node("br_after")));
 
 					let indented_match;
@@ -410,6 +420,28 @@ const inner_render_node_default = (node, parent) =>
 		parent.appendChild(document.createTextNode(node.value)) :
 		node.children.forEach(child => inner_render_node(child, parent));
 
+// not used for performance reason its 15% slower
+// const create_create_element_and_method = (method) => (type, o) =>
+// {
+// 	const element = document.createElement(type);
+// 	o[method](element);
+// 	return element;
+// }
+
+const create_element_and_append = (type, parent) =>
+{
+	const element = document.createElement(type);
+	parent.appendChild(element);
+	return element;
+};
+
+const create_element_and_push = (type, arr) =>
+{
+	const element = document.createElement(type);
+	arr.push(element);
+	return element;
+};
+
 const inner_render_node = (node, parent) =>
 {
 	let append_text_to = parent;
@@ -418,6 +450,12 @@ const inner_render_node = (node, parent) =>
 	outer_switch:
 	switch (type)
 	{
+	case "dd":
+	case "dt":
+	case "tr":
+	case "td":
+	case "th":
+	case "caption":
 	case "a":
 	case "img":
 	case "del":
@@ -431,9 +469,8 @@ const inner_render_node = (node, parent) =>
 	case "mark":
 	case "figcaption":
 	case "spoiler":
-		const element = document.createElement(type);
+		const element = create_element_and_append(type, parent);
 		append_text_to = element; 
-		parent.appendChild(element);
 
 		switch (type)
 		{
@@ -449,52 +486,40 @@ const inner_render_node = (node, parent) =>
 			if (node.alt) element.alt = node.alt;
 			if (node.figcaption) inner_render_node(node.figcaption, parent);
 			break outer_switch;
+		case "td":
+		case "th":
+			element.align = node.align;
+			if (node.rowspan) element.rowSpan = node.rowspan;
+			if (node.colspan) element.colSpan = node.colspan;
 		}
 	default:
 		inner_render_node_default(node, append_text_to);
 
 		switch(type)
 		{
-		case "br_after": parent.appendChild(document.createElement("br")); break;
+		case "br_after": create_element_and_append("br", parent); break;
 		case "li":
 			if (node.under_element)
-			{
-				const p = document.createElement("p");
-				p.replaceChildren(...render(node.under_element));
-				append_text_to.appendChild(p);
-			}
+				create_element_and_append("p", append_text_to).replaceChildren(...render(node.under_element));
 		}
 		break;
 	case "note":
-		const a = document.createElement("a");
+		const a = create_element_and_append("a", create_element_and_append("sup", parent));
 		a.href = `#${NOTE_ID_PREFIX}${node.id}`;
 		inner_render_node_default(node, a);
 
-		const sup = document.createElement("sup");
-		sup.appendChild(a);
-		parent.appendChild(sup);
 		break;
 	case "ruby":
-		const ruby = document.createElement("ruby");
-		const handle_rp = (s) => 
+		const ruby = create_element_and_append("ruby", parent);
+
+		for (const child of node.children)
 		{
-			const rp = document.createElement("rp");
-			rp.textContent = s;
-			ruby.appendChild(rp);
+			inner_render_node(child, ruby);
+			create_element_and_append("rp", ruby).textContent = "(";
+			inner_render_node(child.rt, create_element_and_append("rt", ruby));
+			create_element_and_append("rp", ruby).textContent = ")";
 		}
 
-		for (const pair of node.pairs)
-		{
-			inner_render_node(pair, ruby);
-
-			handle_rp("(");
-			const rt = document.createElement("rt");
-			inner_render_node(pair.rt, rt);
-			ruby.appendChild(rt);
-			handle_rp(")");
-		}
-
-		parent.appendChild(ruby);
 		break;
 	// do nothing
 	case "hr":
@@ -532,44 +557,29 @@ export const render = (tree) =>
 			if (type == "br_after") break;
 			children_nodes.push(element);
 			break;
-
-		case "ul":
-		case "ol":
-			let list = document.createElement(type);
-			if (type == "ol" && node.value != "1")
-				list.start = node.value;
-			
-			for (const item of node.children)
-				inner_render_node(item, list);
-			
-			children_nodes.push(list);
-			break;
 		case "codeblock":
-			let pre = document.createElement("pre");
-			let code = document.createElement("code");
-			code.textContent = node.value;
-			pre.appendChild(code);
-			children_nodes.push(pre);
+			create_element_and_append("code", create_element_and_push("pre", children_nodes)).textContent = node.value;
 			break;
 		case "note_desc":
-			let p = document.createElement("p");
+			let p = create_element_and_push("p", children_nodes);
 			p.classList.add("mdex_note");
 			p.id = NOTE_ID_PREFIX + node.id;
 			inner_render_node(node, p);
-			
-			children_nodes.push(p);
 			break;
+		case "ul":
+		case "ol":
 		case "dl":
-			let dl = document.createElement("dl");
-			for (const child of node.children)
-			{
-				let element = document.createElement(child.type);
-				inner_render_node(child, element);
-				dl.appendChild(element);
-			}
-			children_nodes.push(dl);
+		case "table":
+			let list = create_element_and_push(type, children_nodes);
+			node.children.forEach((child) => inner_render_node(child, list));
+
+			// implement as switch later if changes.
+			if (type == "ol" && node.value != "1")
+				list.start = node.value;
+			
+			if (type == "table" && node.caption)
+				inner_render_node(node.caption, list);
 		}
-		
 	}
 
 	return children_nodes.arr;
