@@ -63,12 +63,10 @@ This is some =sup= and -sub- text.
 )("Hello World!")
 \`\`\``;
 
-const tree = to_tree(markdown);
-console.log(stringify(tree));
-element.replaceChildren(...render(tree));
+element.replaceChildren(...render(to_tree(markdown)));
 ```
 
-The above code will output the following HTML:
+The above code will change the `innerHTML` of `element` to:
 
 ```html
 <h1>Heading</h1>
