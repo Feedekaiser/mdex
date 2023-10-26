@@ -30,6 +30,7 @@
  * Spoiler ✅ use |
  * Furigana (<ruby>) ✅ use {明日(あす)} or {明(あ)日(す)}. {振(ふ)}り{仮(が)名(な)} is amazing! 💯
  * Math formula ❎
+ * Variables ✅ define variables in a tildeblock and type %greeting% = hai, then use %greeting% anywhere below and it will be parsed into hai. 
  */
 
 const tree_node = (type, value) => 
@@ -40,6 +41,7 @@ const tree_node = (type, value) =>
 const EMPTY_ARR = []; // do NOT touch this.
 const NOTE_ID_PREFIX = "_note:";
 const CONTAINER_NODE_TYPE = "_cont";
+const UNDEFINED_VAR_WARNING = "!UNDEFINED_VARIABLE!";
 const INDENTED_LINE     = /^(?:(?:\s{4})|\t)(.+)/;
 const RUBY_PAIR         = /(.+?)(?<!\\)(?:\\\\)*\((.+?)\)/g;
 const DL_DD             = /^:\s(.+)/;
@@ -48,6 +50,8 @@ const TABLE_LEFT_ALIGN  = ":<";
 const TABLE_RIGHT_ALIGN = ">:";
 const TABLE_HEADER      = "#";
 const TABLE_MERGE_MATCH = /^{(?:(\d+)?(?:x(\d+))?)?}(.+)/;
+const VARBLOCK_SETVAR   = /^%(\w+?)%\s=\s(.+)$/;
+
 
 const LINE_MATCH_STRINGS = {
 	hr : /^(?:-{3,}|_{3,}|\*{3,})$/,
@@ -58,6 +62,7 @@ const LINE_MATCH_STRINGS = {
 	blockquote : /^>\s(.+)/,
 	note_desc  : /^\[\^(.+?)\s*(?:"(.+)")?\]:\s(.+)/,
 	codeblock  : /^`{3,}$/,
+	varblock   : /^~{3}$/,
 	table      : /^\|(.+)\|/,
 };
 
@@ -76,6 +81,7 @@ const CHAR_TO_LINE_REGEX_MAP = {};
 	map('>', "blockquote");
 	map('[', "note_desc");
 	map('`', "codeblock");
+	map('~', "varblock");
 	map('|', "table");
 }
 
@@ -93,6 +99,7 @@ for (const [type, regex] of [
 	["sub",     /-(.+?)-/, true],
 	["mark",    /&(.+?)&/, true],
 	["ruby",    /{(.+?)}/, true],
+	["var",     /%(\w+?)%/, true],
 	["note",    /\[\^(.+?)\s*(?:"(.+)")?\]/],
 	["link",    /https?:\/\/\S+\.\S\S+/],
 	["code",    /`(.+?)`/],
@@ -154,6 +161,7 @@ const remove_escapes = (line) =>
 /**
  * @description 
  * optimize the node from `[a, b, [c, d, [e, f, g]]]` to `[a, b, c, d, e, f, g]`
+ * only touch nodes which has type CONTAINER_NODE_TYPE and undefined value.
  */
 const optimize_node = (master_node) => 
 {
@@ -171,14 +179,15 @@ const optimize_node = (master_node) =>
 	return master_node;
 };
 
-const parse_optimize_node = (line, node) => optimize_node(inner_parse_node(line, node));
+const parse_optimize_node = (line, node, variables) => optimize_node(inner_parse_node(line, node, variables));
 
 /**
  * @description parse single line. only match controls. 
  * @param {string} line the line to be changed into a tree.
+ * @param {Object} variables 
  * @return {Array} 
  */
-const inner_parse_node = (line, node = tree_node("text")) => 
+const inner_parse_node = (line, node = tree_node("text"), variables) => 
 {
 	const line_length = line.length;
 	let is_pure_text = true;
@@ -207,11 +216,15 @@ const inner_parse_node = (line, node = tree_node("text")) =>
 
 					switch (type)
 					{
+					case "var":
+						text_node.type = "text";
+						text_node.value = variables[regex_match_result[1]] || UNDEFINED_VAR_WARNING;
+						break;
 					case "ruby":
 						for (const pair of regex_match_result[1].matchAll(RUBY_PAIR))
 						{
-							const base_node = parse_optimize_node(pair[1]);
-							base_node.rt = parse_optimize_node(pair[2]);
+							const base_node = parse_optimize_node(pair[1], undefined, variables);
+							base_node.rt = parse_optimize_node(pair[2], undefined, variables);
 							text_node.children.push(base_node);
 						}
 						if (text_node.children.length == 0)
@@ -225,7 +238,7 @@ const inner_parse_node = (line, node = tree_node("text")) =>
 						text_node.id = regex_match_result[1];
 						if (regex_match_result[2])
 						{
-							parse_optimize_node(regex_match_result[2], text_node);
+							parse_optimize_node(regex_match_result[2], text_node, variables);
 							break;
 						}
 					case "code": text_node.value = regex_match_result[1]; break; // code cannot nest other controls.
@@ -235,18 +248,18 @@ const inner_parse_node = (line, node = tree_node("text")) =>
 						text_node.width = regex_match_result[4];
 						text_node.height = regex_match_result[5];
 						if (regex_match_result[6]) 
-							text_node.figcaption = parse_optimize_node(regex_match_result[6], tree_node("figcaption"));
+							text_node.figcaption = parse_optimize_node(regex_match_result[6], tree_node("figcaption"), variables);
 					case "a": 
 						text_node.link = regex_match_result[2];
 						text_node.hover = regex_match_result[3];
 						if (regex_that_start_with_c == "img") break;
-					default: inner_parse_node(regex_match_result[1], text_node);
+					default: inner_parse_node(regex_match_result[1], text_node, variables);
 					}
 					children.push(text_node);
 				}
 
 				let index_match_end = i + regex_match_result[0].length;
-				index_match_end < line_length && children.push(inner_parse_node(line.substring(index_match_end), tree_node(CONTAINER_NODE_TYPE)));
+				index_match_end < line_length && children.push(inner_parse_node(line.substring(index_match_end), tree_node(CONTAINER_NODE_TYPE), variables));
 
 				break outer_loop;
 			}
@@ -262,7 +275,7 @@ const inner_parse_node = (line, node = tree_node("text")) =>
 /**
  * @param {string} str input string to be rendered
  */
-export const to_tree = (str) =>
+export const to_tree = (str, variables = {}) =>
 {
 	let arr = str.split("\n");
 	let tree = Array();
@@ -283,7 +296,6 @@ export const to_tree = (str) =>
 				node.type = type;
 				switch (type)
 				{
-				default: console.warn(`UNIMPLEMENTED ${type} TYPE!\n trace: ${console.trace()}`); node.type = undefined; break check_match_strings;
 				case "table":
 					if (is_last_char_escaped(arr[i])) { node.type = undefined; break check_match_strings; };
 
@@ -330,7 +342,7 @@ export const to_tree = (str) =>
 							}
 							let trimmed = this_part.trim();
 							if (trimmed != "")
-								tr_node.children.push(parse_optimize_node(trimmed, data_node));
+								tr_node.children.push(parse_optimize_node(trimmed, data_node, variables));
 
 							last = j++;
 						}
@@ -340,30 +352,38 @@ export const to_tree = (str) =>
 					if (i < arr_length && (regex_match_result = arr[i].match(TABLE_CAPTION)))
 					{
 						++i;
-						node.caption = parse_optimize_node(regex_match_result[1], tree_node("caption"));
+						node.caption = parse_optimize_node(regex_match_result[1], tree_node("caption"), variables);
 					}
 
-					
 					break check_match_strings;
 				case "dl":
 					do
 					{
-						node.children.push(parse_optimize_node(regex_match_result[1], tree_node("dt")));
+						node.children.push(parse_optimize_node(regex_match_result[1], tree_node("dt"), variables));
 
 						while (++i < arr_length && (regex_match_result = arr[i].match(DL_DD)))
-							node.children.push(parse_optimize_node(regex_match_result[1], tree_node("dd")));
+							node.children.push(parse_optimize_node(regex_match_result[1], tree_node("dd"), variables));
 					} while (i < arr_length && (regex_match_result = arr[i].match(match_string)));
 					break check_match_strings;
+				case "varblock":
 				case "codeblock":
 					let j = i;
 					while (++j < arr_length && !(arr[j] == arr[i]));
-					node.value = arr.slice(i + 1, j).join("\n");
+
+					let part = arr.slice(i + 1, j);
+
+					if (type == "codeblock") node.value = part.join("\n");
+					else
+						for (const part_line of part)
+							if (regex_match_result = part_line.match(VARBLOCK_SETVAR))
+								variables[regex_match_result[1]] = regex_match_result[2];
+
 					i = j + 1;
 					break check_match_strings;
 				case "blockquote":
 					do
 					{
-						node.children.push(parse_optimize_node(regex_match_result[1], tree_node("br_after")));
+						node.children.push(parse_optimize_node(regex_match_result[1], tree_node("br_after"), variables));
 					} while (++i < arr_length && (regex_match_result = arr[i].match(match_string)));
 					break check_match_strings;
 				case "ol":
@@ -372,29 +392,29 @@ export const to_tree = (str) =>
 					node.value = is_ol && regex_match_result[1];
 					do
 					{
-						const item_node = parse_optimize_node(regex_match_result[1 + is_ol], tree_node("li"));
+						const item_node = parse_optimize_node(regex_match_result[1 + is_ol], tree_node("li"), variables);
 						node.children.push(item_node);
 
 						let text_under_element = Array();
 						let indented_match;
 						while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
 							text_under_element.push(indented_match[1]);
-						if (text_under_element.length > 0) item_node.under_element = to_tree(text_under_element.join("\n"));
+						if (text_under_element.length > 0) item_node.under_element = to_tree(text_under_element.join("\n"), variables);
 					} while (i < arr_length && (regex_match_result = arr[i].match(match_string)))
 					break check_match_strings;
 				case "note_desc":
 					node.id = regex_match_result[1];
-					node.children.push(regex_match_result[2] ? parse_optimize_node(regex_match_result[2] + ": ") : tree_node("text", regex_match_result[1] + ": "));
-					node.children.push(parse_optimize_node(regex_match_result[3], tree_node("br_after")));
+					node.children.push(regex_match_result[2] ? parse_optimize_node(regex_match_result[2] + ": ", undefined, variables) : tree_node("text", regex_match_result[1] + ": "));
+					node.children.push(parse_optimize_node(regex_match_result[3], tree_node("br_after"), variables));
 
 					let indented_match;
 					while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
-						node.children.push(parse_optimize_node(indented_match[1], tree_node("br_after")));
-
+						node.children.push(parse_optimize_node(indented_match[1], tree_node("br_after"), variables));
+					
 					break check_match_strings;
 				case "h":
 					node.type += regex_match_result[1].length;
-					parse_optimize_node(regex_match_result[2], node);
+					parse_optimize_node(regex_match_result[2], node, variables);
 					if (regex_match_result[3]) node.id = regex_match_result[3];
 					// fall through
 				case "hr": ++i;
@@ -406,7 +426,7 @@ export const to_tree = (str) =>
 		if (!node.type)
 		{
 			node.type = "br_after";
-			parse_optimize_node(arr[i++], node);
+			parse_optimize_node(arr[i++], node, variables);
 		}
 
 		tree.push(node);
@@ -519,7 +539,6 @@ const inner_render_node = (node, parent) =>
 			inner_render_node(child.rt, create_element_and_append("rt", ruby));
 			create_element_and_append("rp", ruby).textContent = ")";
 		}
-
 		break;
 	// do nothing
 	case "hr":
