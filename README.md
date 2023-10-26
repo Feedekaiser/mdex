@@ -1,6 +1,6 @@
 # mdex.js - Markdown Parser
 
-**mdex.js** is a lightweight JavaScript module for parsing Markdown and converting it into HTML, loosely adhering to the [Markdown Guide](https://www.markdownguide.org/) specifications.
+**mdex.js** is a lightweight JavaScript module for parsing Markdown and converting it into HTML, *loosely* adhering to the [Markdown Guide](https://www.markdownguide.org/) specifications.
 
 ## Features
 
@@ -12,7 +12,7 @@ mdex.js supports the following Markdown syntax features:
   - Italic
   - Blockquote (Nested blockquote not supported)
   - Lists (ordered and unordered)
-  - Code blocks
+  - Code
   - Horizontal Rule
   - Link
   - Images
@@ -37,15 +37,10 @@ mdex.js supports the following Markdown syntax features:
   - Math formula (coming soon)
   - Variables (defined in tilde blocks using `%variable_name% = value`)
 
+Check out the wiki for more details.
 ## Installation
 
 mdex.js is a single-file module that can be easily integrated into your project. Just import it.  
-
-```html
-<script src="mdex.js"></script>
-```
-
-or
 
 ```javascript
 import { to_tree, render } from './mdex.js';
