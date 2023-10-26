@@ -12,7 +12,7 @@
  * Link ✅
  * Images ✅
  * 
- * https://www.markdownguide.org/extended-syntax/ 🛠️🚧❗
+ * https://www.markdownguide.org/extended-syntax/ ✅❗
  * Strikethrough ✅
  * Tables ✅
  * Footnotes ✅
@@ -58,7 +58,7 @@ const LINE_MATCH_STRINGS = {
 	ol : /^(\d+)\.\s(.+)/,
 	ul : /^[-\*+]\s(.+)/,
 	dl : /^\/(.+)/,
-	h  : /^(#{1,4})\s(.+?)(?:\s#(.*))?$/,
+	h  : /^(#{1,6})\s(.+?)(?:\s#(.*))?$/,
 	blockquote : /^>\s(.+)/,
 	note_desc  : /^\[\^(.+?)\s*(?:"(.+)")?\]:\s(.+)/,
 	codeblock  : /^`{3,}$/,
@@ -566,6 +566,8 @@ export const render = (tree) =>
 		case "h2":
 		case "h3":
 		case "h4":
+		case "h5":
+		case "h6":
 		case "blockquote":
 			let element = document.createElement(type);
 			append_text_to = element;
