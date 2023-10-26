@@ -212,13 +212,12 @@ const inner_parse_node = (line, node = tree_node("text"), variables) =>
 				i > 0 && children.push(inner_parse_node(line.substring(0, i)));
 
 				{
-					const text_node = tree_node(type); // please suggest me a better variable name :D
+					let text_node = tree_node(type); // please suggest me a better variable name :D
 
 					switch (type)
 					{
 					case "var":
-						text_node.type = "text";
-						text_node.value = variables[regex_match_result[1]] || UNDEFINED_VAR_WARNING;
+						text_node = variables[regex_match_result[1]] || tree_node("text", UNDEFINED_VAR_WARNING);
 						break;
 					case "ruby":
 						for (const pair of regex_match_result[1].matchAll(RUBY_PAIR))
@@ -376,7 +375,7 @@ export const to_tree = (str, variables = {}) =>
 					else
 						for (const part_line of part)
 							if (regex_match_result = part_line.match(VARBLOCK_SETVAR))
-								variables[regex_match_result[1]] = regex_match_result[2];
+								variables[regex_match_result[1]] = parse_optimize_node(regex_match_result[2], undefined, variables);
 
 					i = j + 1;
 					break check_match_strings;
