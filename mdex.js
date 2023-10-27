@@ -100,6 +100,7 @@ for (const [type, regex] of [
 	["mark",    /&(.+?)&/, true],
 	["ruby",    /{(.+?)}/, true],
 	["var",     /%(\w+?)%/, true],
+	["math",    /@(.+?)@/, true],
 	["note",    /\[\^(.+?)\s*(?:"(.+)")?\]/],
 	["link",    /https?:\/\/\S+\.\S\S+/],
 	["code",    /`(.+?)`/],
@@ -179,6 +180,52 @@ const optimize_node = (master_node) =>
 	return master_node;
 };
 
+const inner_parse_math = (str) =>
+{
+	let regex_match_result;
+
+	if (regex_match_result.)
+
+	let row_node = tree_node("mrow");
+	for (let j = 0; j < str.length; )
+		if (!str[j].match(/\s/))
+		{
+			let part = str.substring(j);
+
+			if (regex_match_result = part.match(/\d+/))
+			{
+				let num = regex_match_result[0];
+				row_node.children.push(tree_node("mn", num));
+				j += num.length;
+			} 
+			else if (regex_match_result = part.match(/[A-Za-Z]+/))
+			{
+				let identifier = regex_match_result[0];
+				for (const c of identifier) row_node.children.push(tree_node("mi", c));
+				j += identifier.length;
+			}
+		}
+	return row_node;
+}
+
+const parse_math = (str) =>
+{
+	let regex_match_result;
+
+	if (regex_match_result = str.match("^(.+?)=(.+)$"))
+	{
+		let arr_node = Array()
+		arr_node.push(inner_parse_math(regex_match_result[1]));
+		arr_node.push(tree_node("mo", "="));
+		arr_node.push(inner_parse_math(regex_match_result[2]));
+		return arr_node;
+	}
+
+	return [inner_parse_math(str)];
+}
+
+
+
 const parse_optimize_node = (line, node, variables) => optimize_node(inner_parse_node(line, node, variables));
 
 /**
@@ -216,6 +263,9 @@ const inner_parse_node = (line, node = tree_node("text"), variables) =>
 
 					switch (type)
 					{
+					case "math":
+						parse_math(regex_match_result[1], text_node);
+						break;
 					case "var":
 						text_node = variables[regex_match_result[1]] || tree_node("text", UNDEFINED_VAR_WARNING);
 						break;
