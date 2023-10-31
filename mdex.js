@@ -29,7 +29,7 @@
  * Underline ✅ use _
  * Spoiler ✅ use |
  * Furigana (<ruby>) ✅ use {明日(あす)} or {明(あ)日(す)}. {振(ふ)}り{仮(が)名(な)} is amazing! 💯
- * Math formula ❎
+ * Math formula ✅
  * Variables ✅ define variables in a tildeblock and type %greeting% = hai, then use %greeting% anywhere below and it will be parsed into hai. 
  */
 
