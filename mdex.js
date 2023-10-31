@@ -39,6 +39,7 @@ const tree_node = (type, value) =>
 }
 
 const EMPTY_ARR = []; // do NOT touch this.
+const EMPTY_STRING = "";
 const NOTE_ID_PREFIX = "_note:";
 const CONTAINER_NODE_TYPE = "_cont";
 const UNDEFINED_VAR_WARNING = "!UNDEFINED_VARIABLE!";
@@ -100,6 +101,7 @@ for (const [type, regex] of [
 	["mark",    /&(.+?)&/, true],
 	["ruby",    /{(.+?)}/, true],
 	["var",     /%(\w+?)%/, true],
+	["math",    /@(.+?)@/, true],
 	["note",    /\[\^(.+?)\s*(?:"(.+)")?\]/],
 	["link",    /https?:\/\/\S+\.\S\S+/],
 	["code",    /`(.+?)`/],
@@ -179,6 +181,85 @@ const optimize_node = (master_node) =>
 	return master_node;
 };
 
+const FUNCTIONS = {abs:1,and:1,arccos:1,arcsin:1,arctan:1,C:1,ceil:1,cot:1,cos:1,cosh:1,csc:1,deg:1,exp:1,fact:1,floor:1,frac:"mfrac",if:1,int:1,lim:1,log:1,ln:1,max:1,min:1,or:1,over:"mover",P:1,pow:"msup",prod:1,rad:1,root:"mroot",round:1,sec:1,sgn:1,sign:1,sin:1,sinh:1,sqrt:"msqrt",sum:1,sub:"msub",tan:1,tanh:1,under:"munder"};
+
+const math_lex = (str) =>
+{
+	let str_length = str.length;
+	let tokens = Array();
+	{
+		let i;
+
+		const check_and_build = (f) =>
+		{
+			let buffer = str[i];
+			while (++i < str_length && f(str.charCodeAt(i)))
+				buffer += str[i];
+			return buffer;
+		}
+
+		for (i = 0; i < str_length;)
+		{
+			let c = str.charCodeAt(i);
+			switch (c)
+			{
+
+			case 0x26: // '&' 
+				tokens.push([check_and_build((cc) => cc != 0x26), 'ms']);
+				break;
+			case 0x2A: // '*'
+				tokens.push(['·', "mi"])
+			case 0x20: // space
+				++i; break;
+			// '0', '1', ..., '9'
+			case 0x30: case 0x31: case 0x32: case 0x33: case 0x34:
+			case 0x35: case 0x36: case 0x37: case 0x38: case 0x39:
+				tokens.push([check_and_build((cc) => (cc >= 0x30 && cc <= 0x39) || cc == 0x2E), 'mn']);
+				break;
+
+			// 'A', 'B', ..., 'Z'
+			case 0x41: case 0x42: case 0x43: case 0x44: case 0x45:
+			case 0x46: case 0x47: case 0x48: case 0x49: case 0x4A:
+			case 0x4B: case 0x4C: case 0x4D: case 0x4E: case 0x4F:
+			case 0x50: case 0x51: case 0x52: case 0x53: case 0x54:
+			case 0x55: case 0x56: case 0x57: case 0x58: case 0x59:
+			case 0x5A:
+
+			// 'a', 'b', ..., 'z'
+			case 0x61: case 0x62: case 0x63: case 0x64: case 0x65:
+			case 0x66: case 0x67: case 0x68: case 0x69: case 0x6A:
+			case 0x6B: case 0x6C: case 0x6D: case 0x6E: case 0x6F:
+			case 0x70: case 0x71: case 0x72: case 0x73: case 0x74:
+			case 0x75: case 0x76: case 0x77: case 0x78: case 0x79:
+			case 0x7A:
+				let substr = check_and_build((cc) => (cc >= 0x41 && cc <= 0x5A) || (cc >= 0x61 && c <= 0x7A));
+
+				if (FUNCTIONS[substr])
+					tokens.push([substr, 'mi']);
+				else
+					for (const character of substr)
+						tokens.push([character, 'mi']);
+
+				break;
+			default:
+				tokens.push([str[i++], 'mo']);
+			}
+		}
+	}
+
+	{
+		let bracket_stack = Array();
+		for (let i = 0, token = tokens[i], idx_open; i < tokens.length; token = tokens[++i])
+			if (token[0] == '(')
+				bracket_stack.push(i);
+			else if (token[0] == ')')
+				if ((idx_open = bracket_stack.pop()) != undefined)
+					tokens[idx_open].push(i), token.push(idx_open);
+	}
+
+	return tokens;
+};
+
 const parse_optimize_node = (line, node, variables) => optimize_node(inner_parse_node(line, node, variables));
 
 /**
@@ -216,9 +297,10 @@ const inner_parse_node = (line, node = tree_node("text"), variables) =>
 
 					switch (type)
 					{
+					case "math":
+						text_node.tokens = math_lex(regex_match_result[1]); break;
 					case "var":
-						text_node = variables[regex_match_result[1]] || tree_node("text", UNDEFINED_VAR_WARNING);
-						break;
+						text_node = variables[regex_match_result[1]] || tree_node("text", UNDEFINED_VAR_WARNING); break;
 					case "ruby":
 						for (const pair of regex_match_result[1].matchAll(RUBY_PAIR))
 						{
@@ -340,7 +422,7 @@ export const to_tree = (str, variables = {}) =>
 								this_part = regex_match_result[3];
 							}
 							let trimmed = this_part.trim();
-							if (trimmed != "")
+							if (trimmed != EMPTY_STRING)
 								tr_node.children.push(parse_optimize_node(trimmed, data_node, variables));
 
 							last = j++;
@@ -461,6 +543,64 @@ const create_element_and_push = (type, arr) =>
 	return element;
 };
 
+const math_parse = (tokens, start = 0, end = tokens.length) =>
+{
+	let mrow = document.createElement("mrow");
+	let next_token;
+	let element;
+
+	const create_and_append = (token) =>
+	{
+		element = document.createElement(token[1]);
+		element.textContent = token[0];
+		mrow.appendChild(element);
+	};
+
+	for (let i = start, current_token = tokens[i]; i < end; current_token = tokens[++i])
+	{
+		if (current_token[1] == "ms") { create_and_append(current_token); continue; }
+		
+		switch (current_token[0])
+		{
+		case "sqrt":
+			next_token = tokens[i + 1];
+			if (next_token[0] == '(')
+			{
+				element = document.createElement(FUNCTIONS[current_token[0]]);
+				element.appendChild(math_parse(tokens, i + 2, next_token[2]));
+				mrow.appendChild(element);
+				i = next_token[2];
+			}
+			continue;
+		case "over":
+		case "under":
+		case "sub":
+		case "frac":
+		case "pow":
+		case "root":
+			next_token = tokens[i + 1];
+			if (next_token[0] == '(')
+			{
+				element = document.createElement(FUNCTIONS[current_token[0]]);
+
+				let idx_comma;
+				for (idx_comma = i + 2; idx_comma < end && tokens[idx_comma][0] != ','; ++idx_comma)
+					if (tokens[idx_comma][0] == '(')
+						idx_comma = tokens[idx_comma][2];
+
+				element.appendChild(math_parse(tokens, i + 2, idx_comma));
+				element.appendChild(math_parse(tokens, idx_comma + 1, next_token[2]));
+				mrow.appendChild(element);
+				i = next_token[2];
+			}
+			continue;
+		default:
+			create_and_append(current_token);
+		}
+	}
+	return mrow;
+};
+
 const inner_render_node = (node, parent) =>
 {
 	let append_text_to = parent;
@@ -538,6 +678,9 @@ const inner_render_node = (node, parent) =>
 			inner_render_node(child.rt, create_element_and_append("rt", ruby));
 			create_element_and_append("rp", ruby).textContent = ")";
 		}
+		break;
+	case "math":
+		create_element_and_append("math", parent).replaceChildren(math_parse(node.tokens))
 		break;
 	// do nothing
 	case "hr":
