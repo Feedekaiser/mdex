@@ -89,7 +89,7 @@ const CHAR_TO_LINE_REGEX_MAP = {};
 
 const CHAR_TO_REGEX_MAP = {};
 for (const [type, regex] of [
-	["img",     /!(?:\[(.+)\])?\((.+?)\s*(?:"(.+)")?\)(?:{(?:(\d+)?(?:x(\d+))?)?(?:\s*"(.+)")?})?/],
+	["img",     /!(?:\[(.+)\])?\((.+?)\s*(?:"(.+)")?\)(?:{(?:(\d+)?(?:x(\d+))?)?(?:\s*"(.+)")?})?(?:\((.+?)\))?/],
 	["a",       /\[(.+)\]\((.+?)\s*(?:"(.+)")?\)/],
 	["del",     /~(.+?)~/, true],
 	["u",       /_(.+?)_/, true],
@@ -203,9 +203,8 @@ const math_lex = (str) =>
 			let c = str.charCodeAt(i);
 			switch (c)
 			{
-
-			case 0x26: // '&' 
-				tokens.push([check_and_build((cc) => cc != 0x26), 'ms']);
+			case 0x26: // '&'
+				++i; tokens.push([check_and_build((cc) => cc != 0x26), 'ms']); ++i;
 				break;
 			case 0x2A: // '*'
 				tokens.push(['·', "mi"])
@@ -232,8 +231,7 @@ const math_lex = (str) =>
 			case 0x70: case 0x71: case 0x72: case 0x73: case 0x74:
 			case 0x75: case 0x76: case 0x77: case 0x78: case 0x79:
 			case 0x7A:
-				let substr = check_and_build((cc) => (cc >= 0x41 && cc <= 0x5A) || (cc >= 0x61 && c <= 0x7A));
-
+				let substr = check_and_build((cc) => (cc >= 0x41 && cc <= 0x5A) || (cc >= 0x61 && cc <= 0x7A));
 				if (FUNCTIONS[substr])
 					tokens.push([substr, 'mi']);
 				else
@@ -256,7 +254,6 @@ const math_lex = (str) =>
 				if ((idx_open = bracket_stack.pop()) != undefined)
 					tokens[idx_open].push(i), token.push(idx_open);
 	}
-
 	return tokens;
 };
 
@@ -326,14 +323,17 @@ const inner_parse_node = (line, node = tree_node("text"), variables) =>
 					case "link": text_node.type = "a"; text_node.link = regex_match_result[0]; text_node.value = regex_match_result[0]; break;
 					case "img":
 						text_node.alt = regex_match_result[1];
+						text_node.src = regex_match_result[2];
+						text_node.hover = regex_match_result[3];
 						text_node.width = regex_match_result[4];
 						text_node.height = regex_match_result[5];
 						if (regex_match_result[6]) 
 							text_node.figcaption = parse_optimize_node(regex_match_result[6], tree_node("figcaption"), variables);
+						text_node.link = regex_match_result[7];
+						break;
 					case "a": 
 						text_node.link = regex_match_result[2];
 						text_node.hover = regex_match_result[3];
-						if (regex_that_start_with_c == "img") break;
 					default: inner_parse_node(regex_match_result[1], text_node, variables);
 					}
 					children.push(text_node);
@@ -563,7 +563,7 @@ const math_parse = (tokens, start = 0, end = tokens.length) =>
 		switch (current_token[0])
 		{
 		case "sqrt":
-			next_token = tokens[i + 1];
+			next_token = tokens[i + 1] || [];
 			if (next_token[0] == '(')
 			{
 				element = document.createElement(FUNCTIONS[current_token[0]]);
@@ -578,7 +578,7 @@ const math_parse = (tokens, start = 0, end = tokens.length) =>
 		case "frac":
 		case "pow":
 		case "root":
-			next_token = tokens[i + 1];
+			next_token = tokens[i + 1] || [];
 			if (next_token[0] == '(')
 			{
 				element = document.createElement(FUNCTIONS[current_token[0]]);
@@ -616,7 +616,6 @@ const inner_render_node = (node, parent) =>
 	case "th":
 	case "caption":
 	case "a":
-	case "img":
 	case "del":
 	case "em":
 	case "strong":
@@ -637,14 +636,6 @@ const inner_render_node = (node, parent) =>
 			element.href = node.link;
 			if (node.hover) element.title = node.hover;
 			break;
-		case "img":
-			element.src = node.link;
-			if (node.hover) element.title = node.hover;
-			if (node.width) element.width = node.width;
-			if (node.height) element.height = node.height;
-			if (node.alt) element.alt = node.alt;
-			if (node.figcaption) inner_render_node(node.figcaption, parent);
-			break outer_switch;
 		case "td":
 		case "th":
 			element.align = node.align;
@@ -680,7 +671,22 @@ const inner_render_node = (node, parent) =>
 		}
 		break;
 	case "math":
-		create_element_and_append("math", parent).replaceChildren(math_parse(node.tokens))
+		create_element_and_append("math", parent).replaceChildren(math_parse(node.tokens));
+		break;
+	case "img":
+		if (node.link)
+		{
+			parent = create_element_and_append("a", parent);
+			parent.href = node.link;
+		}
+		
+		let img = create_element_and_append("img", parent);
+		img.src = node.src;
+		img.alt = node.alt;
+		if (node.hover) img.title = node.hover;
+		if (node.width) img.width = node.width;
+		if (node.height) img.height = node.height;
+		if (node.figcaption) inner_render_node(node.figcaption, parent);		
 		break;
 	// do nothing
 	case "hr":
