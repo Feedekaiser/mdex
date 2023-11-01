@@ -205,7 +205,7 @@ const math_lex = (str) =>
 			{
 
 			case 0x26: // '&' 
-				tokens.push([check_and_build((cc) => cc != 0x26), 'ms']);
+				++i; tokens.push([check_and_build((cc) => cc != 0x26), 'ms']); ++i;
 				break;
 			case 0x2A: // '*'
 				tokens.push(['·', "mi"])
@@ -232,8 +232,7 @@ const math_lex = (str) =>
 			case 0x70: case 0x71: case 0x72: case 0x73: case 0x74:
 			case 0x75: case 0x76: case 0x77: case 0x78: case 0x79:
 			case 0x7A:
-				let substr = check_and_build((cc) => (cc >= 0x41 && cc <= 0x5A) || (cc >= 0x61 && c <= 0x7A));
-
+				let substr = check_and_build((cc) => (cc >= 0x41 && cc <= 0x5A) || (cc >= 0x61 && cc <= 0x7A));
 				if (FUNCTIONS[substr])
 					tokens.push([substr, 'mi']);
 				else
@@ -256,7 +255,6 @@ const math_lex = (str) =>
 				if ((idx_open = bracket_stack.pop()) != undefined)
 					tokens[idx_open].push(i), token.push(idx_open);
 	}
-
 	return tokens;
 };
 
@@ -563,7 +561,7 @@ const math_parse = (tokens, start = 0, end = tokens.length) =>
 		switch (current_token[0])
 		{
 		case "sqrt":
-			next_token = tokens[i + 1];
+			next_token = tokens[i + 1] || [];
 			if (next_token[0] == '(')
 			{
 				element = document.createElement(FUNCTIONS[current_token[0]]);
@@ -578,7 +576,7 @@ const math_parse = (tokens, start = 0, end = tokens.length) =>
 		case "frac":
 		case "pow":
 		case "root":
-			next_token = tokens[i + 1];
+			next_token = tokens[i + 1] || [];
 			if (next_token[0] == '(')
 			{
 				element = document.createElement(FUNCTIONS[current_token[0]]);
@@ -680,7 +678,7 @@ const inner_render_node = (node, parent) =>
 		}
 		break;
 	case "math":
-		create_element_and_append("math", parent).replaceChildren(math_parse(node.tokens))
+		create_element_and_append("math", parent).replaceChildren(math_parse(node.tokens));
 		break;
 	// do nothing
 	case "hr":
