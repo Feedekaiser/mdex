@@ -34,10 +34,10 @@ mdex.js supports the following Markdown syntax features:
   - Underline (using `_`)
   - Spoiler (using `|`)
   - Furigana (using curly braces `{}` with readings in parentheses) e.g., `{明日(あす)}` or `{明(あ)日(す)}`.
-  - Math formula (coming soon)
+  - Math formula
   - Variables (defined in tilde blocks using `%variable_name% = value`)
 
-Check out the wiki for more details.
+Check out the [wiki](https://github.com/Feedekaiser/mdex/wiki/Basics) for more details.
 ## Installation
 
 mdex.js is a single-file module that can be easily integrated into your project. Just import it.  
