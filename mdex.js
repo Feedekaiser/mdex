@@ -2,7 +2,7 @@
 
 const tree_node = (type, value) => 
 {
-	return { type : type, value: value, children : Array() };
+	return { type : type, value: value, children : [] };
 }
 
 const EMPTY_ARR = []; // do NOT touch this.
@@ -110,11 +110,7 @@ const remove_escapes = (line) =>
 
 		const backslash_remained = Math.floor(backslash_count * 0.5);
 
-		line = 
-			line.substring(0, i - backslash_count) +
-			"\\".repeat(backslash_remained) +
-			line.substring(i);
-
+		line = `${line.substring(0, i - backslash_count)}${"\\".repeat(backslash_remained)}${line.substring(i)}`;
 		i -= backslash_remained;
 	}
 
@@ -147,7 +143,7 @@ const MATH_FUNCTIONS = {abs:1,and:1,arccos:1,arcsin:1,arctan:1,C:1,ceil:1,cot:1,
 const math_lex = (str) =>
 {
 	let str_length = str.length;
-	let tokens = Array();
+	let tokens = [];
 	{
 		let i;
 
@@ -165,7 +161,7 @@ const math_lex = (str) =>
 			switch (c)
 			{
 			case 0x26: // '&'
-				++i; tokens.push([check_and_build((cc) => cc != 0x26), 'ms']); ++i;
+				++i; tokens.push([`​${check_and_build((cc) => cc != 0x26)} ​`, "mtext"]); ++i; // zwsp at the end and start
 				break;
 			case 0x2A: // '*'
 				tokens.push(['·', "mi"])
@@ -207,7 +203,7 @@ const math_lex = (str) =>
 	}
 
 	{
-		let bracket_stack = Array();
+		let bracket_stack = [];
 		for (let i = 0, token = tokens[i], idx_open; i < tokens.length; token = tokens[++i])
 			if (token[0] == '(')
 				bracket_stack.push(i);
@@ -269,7 +265,6 @@ const inner_parse_node = (line, node = tree_node("text"), variables) =>
 						{
 							text_node.type = "text";
 							text_node.value = regex_match_result[1];
-							break;
 						}
 						break;
 					case "note":
@@ -287,8 +282,7 @@ const inner_parse_node = (line, node = tree_node("text"), variables) =>
 						text_node.hover = regex_match_result[3];
 						text_node.width = regex_match_result[4];
 						text_node.height = regex_match_result[5];
-						if (regex_match_result[6]) 
-							text_node.figcaption = parse_optimize_node(regex_match_result[6], tree_node("figcaption"), variables);
+						if (regex_match_result[6]) text_node.figcaption = parse_optimize_node(regex_match_result[6], tree_node("figcaption"), variables);
 						text_node.link = regex_match_result[7];
 						break;
 					case "a": 
@@ -319,7 +313,7 @@ const inner_parse_node = (line, node = tree_node("text"), variables) =>
 export const to_tree = (str, variables = {}) =>
 {
 	let arr = str.split("\n");
-	let tree = Array();
+	let tree = [];
 	let regex_match_result;
 
 	const arr_length = arr.length;
@@ -362,7 +356,7 @@ export const to_tree = (str, variables = {}) =>
 								data_node.align = "left";
 								this_part = this_part.substring(TABLE_LEFT_ALIGN.length);
 							} 
-							else if (this_part.endsWith(TABLE_RIGHT_ALIGN) && !is_escaped(this_part, this_part.length))
+							else if (this_part.endsWith(TABLE_RIGHT_ALIGN) && !is_escaped(this_part, this_part.length - TABLE_RIGHT_ALIGN.length))
 							{
 								data_node.align = "right";
 								this_part = this_part.substring(0, this_part.length - TABLE_RIGHT_ALIGN.length);
@@ -436,7 +430,7 @@ export const to_tree = (str, variables = {}) =>
 						const item_node = parse_optimize_node(regex_match_result[1 + is_ol], tree_node("li"), variables);
 						node.children.push(item_node);
 
-						let text_under_element = Array();
+						let text_under_element = [];
 						let indented_match;
 						while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
 							text_under_element.push(indented_match[1]);
@@ -519,23 +513,20 @@ const math_render = (tokens, start = 0, end = tokens.length) =>
 {
 	let children = [];
 
-	const create_and_append = (token) =>
-	{
-		let element = document.createElement(token[1]);
-		element.textContent = token[0];
-		children.push(element);
-	};
+	const default_token_handle = (token) =>
+		create_element_and_push(token[1], children).textContent = token[0];
+
 
 	for (let i = start, current_token = tokens[i]; i < end; current_token = tokens[++i])
 	{
-		if (current_token[1] == "ms") { create_and_append(current_token); continue; }
+		if (current_token[1] == "mtext") { default_token_handle(current_token); continue; }
 		
 		let arg_count = MATH_ARG_COUNT[current_token[0]];
 		let next_token = tokens[i + 1] || [];
 
 		if (arg_count && (next_token[0] == '('))
 		{
-			let element = document.createElement(MATH_FUNCTIONS[current_token[0]]);
+			let element = create_element_and_push(MATH_FUNCTIONS[current_token[0]], children);
 			let idx_comma;
 			let start = i + 2;
 			while (--arg_count > 0)
@@ -549,12 +540,11 @@ const math_render = (tokens, start = 0, end = tokens.length) =>
 			}
 
 			element.appendChild(math_render(tokens, (idx_comma + 1) || start, next_token[2]));
-			children.push(element);
 			i = next_token[2];
 			continue;
 		}
 
-		create_and_append(current_token);
+		default_token_handle(current_token);
 	}
 	if (children.length == 1) return children[0];
 	
@@ -570,6 +560,7 @@ const inner_render_node = (node, parent) =>
 	
 	switch (type)
 	{
+	// put here if need to create this element
 	case "dd":
 	case "dt":
 	case "tr":
@@ -603,6 +594,7 @@ const inner_render_node = (node, parent) =>
 			if (node.rowspan) element.rowSpan = node.rowspan;
 			if (node.colspan) element.colSpan = node.colspan;
 		}
+	// if not just render it on the parent node as text
 	default:
 		inner_render_node_default(node, append_text_to);
 
@@ -656,7 +648,7 @@ const inner_render_node = (node, parent) =>
 
 class mock_element
 {
-	constructor() { this.arr = Array(); }
+	constructor() { this.arr = []; }
 	appendChild(element) { this.arr.push(element); }
 	push(element) { this.arr.push(element) }
 };
