@@ -1,37 +1,4 @@
-/*
- * mdex.js is a markdown parser.
- * https://www.markdownguide.org/basic-syntax/ ✅❗
- * Headings ✅ will not support alternate syntax.
- * Bold ✅ use ^ instead of **
- * Italic ✅
- * Blockquote ✅
- * Nested blockquote ❌ rare + is ambiguous by nature without adding extra controls.
- * (Nested) List ✅
- * Code ✅
- * Horizontal Rule ✅
- * Link ✅
- * Images ✅
- * 
- * https://www.markdownguide.org/extended-syntax/ ✅❗
- * Strikethrough ✅
- * Tables ✅
- * Footnotes ✅
- * Heading IDs ✅
- * Definition Lists ✅
- * Task Lists ❓
- * Emoji ❌
- * Highlight ✅
- * Subscript & Superscript ✅
- * Automatic URL Linking ✅ escape it using backslash instead of surrounding it with backticks!
- * Fenced Code Blocks ✅
- * 
- * extended-extended features: 🛠️🚧
- * Underline ✅ use _
- * Spoiler ✅ use |
- * Furigana (<ruby>) ✅ use {明日(あす)} or {明(あ)日(す)}. {振(ふ)}り{仮(が)名(な)} is amazing! 💯
- * Math formula ✅
- * Variables ✅ define variables in a tildeblock and type %greeting% = hai, then use %greeting% anywhere below and it will be parsed into hai. 
- */
+// roadmap in the bottom
 
 const tree_node = (type, value) => 
 {
@@ -91,17 +58,17 @@ const CHAR_TO_REGEX_MAP = {};
 for (const [type, regex] of [
 	["img",     /!(?:\[(.+)\])?\((.+?)\s*(?:"(.+)")?\)(?:{(?:(\d+)?(?:x(\d+))?)?(?:\s*"(.+)")?})?(?:\((.+?)\))?/],
 	["a",       /\[(.+)\]\((.+?)\s*(?:"(.+)")?\)/],
-	["del",     /~(.+?)~/, true],
-	["u",       /_(.+?)_/, true],
-	["spoiler", /\|(.+?)\|/, true],
-	["strong",  /\^(.+?)\^/, true],
-	["em",      /\*(.+?)\*/, true],
-	["sup",     /=(.+?)=/, true],
-	["sub",     /-(.+?)-/, true],
-	["mark",    /&(.+?)&/, true],
-	["ruby",    /{(.+?)}/, true],
-	["var",     /%(\w+?)%/, true],
-	["math",    /@(.+?)@/, true],
+	["del",     /~(.+?)(?<!\\)(?:\\\\)*~/],
+	["u",       /_(.+?)(?<!\\)(?:\\\\)*_/],
+	["spoiler", /\|(.+?)(?<!\\)(?:\\\\)*\|/],
+	["strong",  /\^(.+?)(?<!\\)(?:\\\\)*\^/],
+	["em",      /\*(.+?)(?<!\\)(?:\\\\)*\*/],
+	["sup",     /=(.+?)(?<!\\)(?:\\\\)*=/],
+	["sub",     /-(.+?)(?<!\\)(?:\\\\)*-/],
+	["mark",    /&(.+?)(?<!\\)(?:\\\\)*&/],
+	["ruby",    /{(.+?)(?<!\\)(?:\\\\)*}/],
+	["var",     /%(\w+?)%/],
+	["math",    /@(.+?)@/],
 	["note",    /\[\^(.+?)\s*(?:"(.+)")?\]/],
 	["link",    /https?:\/\/\S+\.\S\S+/],
 	["code",    /`(.+?)`/],
@@ -126,12 +93,6 @@ const is_escaped = (str, idx) =>
 
 	return escaped;
 };
-
-/**
- * @param {string} str 
- * @returns {boolean}
- */
-const is_last_char_escaped = (str) => is_escaped(str, str.length - 1);	
 
 /**
  * @param {string} line 
@@ -181,7 +142,7 @@ const optimize_node = (master_node) =>
 	return master_node;
 };
 
-const FUNCTIONS = {abs:1,and:1,arccos:1,arcsin:1,arctan:1,C:1,ceil:1,cot:1,cos:1,cosh:1,csc:1,deg:1,exp:1,fact:1,floor:1,frac:"mfrac",if:1,int:1,lim:1,log:1,ln:1,max:1,min:1,or:1,over:"mover",P:1,pow:"msup",prod:1,rad:1,root:"mroot",round:1,sec:1,sgn:1,sign:1,sin:1,sinh:1,sqrt:"msqrt",sum:1,sub:"msub",tan:1,tanh:1,under:"munder"};
+const MATH_FUNCTIONS = {abs:1,and:1,arccos:1,arcsin:1,arctan:1,C:1,ceil:1,cot:1,cos:1,cosh:1,csc:1,deg:1,exp:1,fact:1,floor:1,frac:"mfrac",if:1,int:1,lim:1,log:1,ln:1,max:1,min:1,or:1,over:"mover",P:1,pow:"msup",prod:1,rad:1,root:"mroot",round:1,sec:1,sgn:1,sign:1,sin:1,sinh:1,sqrt:"msqrt",sum:1,sub:"msub",subsup:"msubsup",tan:1,tanh:1,under:"munder",underover:"munderover"};
 
 const math_lex = (str) =>
 {
@@ -232,7 +193,7 @@ const math_lex = (str) =>
 			case 0x75: case 0x76: case 0x77: case 0x78: case 0x79:
 			case 0x7A:
 				let substr = check_and_build((cc) => (cc >= 0x41 && cc <= 0x5A) || (cc >= 0x61 && cc <= 0x7A));
-				if (FUNCTIONS[substr])
+				if (MATH_FUNCTIONS[substr])
 					tokens.push([substr, 'mi']);
 				else
 					for (const character of substr)
@@ -279,9 +240,8 @@ const inner_parse_node = (line, node = tree_node("text"), variables) =>
 		if (!regex_that_start_with_c || is_escaped(line, i))
 			continue;
 
-		for (const [type, regex, check_lastchar_escaped] of regex_that_start_with_c)
-			if ((regex_match_result = line.substring(i).match(regex)) && 
-				!(check_lastchar_escaped && is_last_char_escaped(regex_match_result[0])))
+		for (const [type, regex] of regex_that_start_with_c)
+			if ((regex_match_result = line.substring(i).match(regex)))
 			{
 				is_pure_text = false;
 
@@ -378,7 +338,7 @@ export const to_tree = (str, variables = {}) =>
 				switch (type)
 				{
 				case "table":
-					if (is_last_char_escaped(arr[i])) { node.type = undefined; break check_match_strings; };
+					if (is_escaped(arr[i], arr[i].length - 1)) { node.type = undefined; break check_match_strings; };
 
 					do
 					{
@@ -543,61 +503,63 @@ const create_element_and_push = (type, arr) =>
 	return element;
 };
 
-const math_parse = (tokens, start = 0, end = tokens.length) =>
+const MATH_ARG_COUNT = {
+	sqrt  : 1,
+	over  : 2,
+	under : 2,
+	sub   : 2,
+	frac  : 2,
+	pow   : 2,
+	root  : 2,
+	underover : 3,
+	subsup : 3,
+}
+
+const math_render = (tokens, start = 0, end = tokens.length) =>
 {
-	let mrow = document.createElement("mrow");
-	let next_token;
-	let element;
+	let children = [];
 
 	const create_and_append = (token) =>
 	{
-		element = document.createElement(token[1]);
+		let element = document.createElement(token[1]);
 		element.textContent = token[0];
-		mrow.appendChild(element);
+		children.push(element);
 	};
 
 	for (let i = start, current_token = tokens[i]; i < end; current_token = tokens[++i])
 	{
 		if (current_token[1] == "ms") { create_and_append(current_token); continue; }
 		
-		switch (current_token[0])
-		{
-		case "sqrt":
-			next_token = tokens[i + 1] || [];
-			if (next_token[0] == '(')
-			{
-				element = document.createElement(FUNCTIONS[current_token[0]]);
-				element.appendChild(math_parse(tokens, i + 2, next_token[2]));
-				mrow.appendChild(element);
-				i = next_token[2];
-			}
-			continue;
-		case "over":
-		case "under":
-		case "sub":
-		case "frac":
-		case "pow":
-		case "root":
-			next_token = tokens[i + 1] || [];
-			if (next_token[0] == '(')
-			{
-				element = document.createElement(FUNCTIONS[current_token[0]]);
+		let arg_count = MATH_ARG_COUNT[current_token[0]];
+		let next_token = tokens[i + 1] || [];
 
-				let idx_comma;
-				for (idx_comma = i + 2; idx_comma < end && tokens[idx_comma][0] != ','; ++idx_comma)
+		if (arg_count && (next_token[0] == '('))
+		{
+			let element = document.createElement(MATH_FUNCTIONS[current_token[0]]);
+			let idx_comma;
+			let start = i + 2;
+			while (--arg_count > 0)
+			{
+				for (idx_comma = start; idx_comma < end && tokens[idx_comma][0] != ','; ++idx_comma)
 					if (tokens[idx_comma][0] == '(')
 						idx_comma = tokens[idx_comma][2];
 
-				element.appendChild(math_parse(tokens, i + 2, idx_comma));
-				element.appendChild(math_parse(tokens, idx_comma + 1, next_token[2]));
-				mrow.appendChild(element);
-				i = next_token[2];
+				element.appendChild(math_render(tokens, start, idx_comma));
+				start = idx_comma + 1;
 			}
+
+			element.appendChild(math_render(tokens, (idx_comma + 1) || start, next_token[2]));
+			children.push(element);
+			i = next_token[2];
 			continue;
-		default:
-			create_and_append(current_token);
 		}
+
+		create_and_append(current_token);
 	}
+	if (children.length == 1) return children[0];
+	
+	let mrow = document.createElement("mrow");
+	mrow.replaceChildren(...children);
 	return mrow;
 };
 
@@ -606,7 +568,6 @@ const inner_render_node = (node, parent) =>
 	let append_text_to = parent;
 	const type = node.type;
 	
-	outer_switch:
 	switch (type)
 	{
 	case "dd":
@@ -671,7 +632,7 @@ const inner_render_node = (node, parent) =>
 		}
 		break;
 	case "math":
-		create_element_and_append("math", parent).replaceChildren(math_parse(node.tokens));
+		create_element_and_append("math", parent).replaceChildren(math_render(node.tokens));
 		break;
 	case "img":
 		if (node.link)
@@ -753,3 +714,38 @@ export const render = (tree) =>
 
 	return children_nodes.arr;
 };
+
+
+/*
+ * https://www.markdownguide.org/basic-syntax/ ✅❗
+ * Headings ✅ will not support alternate syntax.
+ * Bold ✅ use ^ instead of **
+ * Italic ✅
+ * Blockquote ✅
+ * Nested blockquote ❌ rare + is ambiguous by nature without adding extra controls.
+ * (Nested) List ✅
+ * Code ✅
+ * Horizontal Rule ✅
+ * Link ✅
+ * Images ✅
+ * 
+ * https://www.markdownguide.org/extended-syntax/ ✅❗
+ * Strikethrough ✅
+ * Tables ✅
+ * Footnotes ✅
+ * Heading IDs ✅
+ * Definition Lists ✅
+ * Task Lists ❓
+ * Emoji ❓
+ * Highlight ✅ use &
+ * Subscript & Superscript ✅ use - and =
+ * Automatic URL Linking ✅ escape it using backslash instead of surrounding it with backticks!
+ * Fenced Code Blocks ✅
+ * 
+ * extended-extended features: 🛠️🚧
+ * Underline ✅ use _
+ * Spoiler ✅ use |
+ * Furigana (<ruby>) ✅ use {明日(あす)} or {明(あ)日(す)}. {振(ふ)}り{仮(が)名(な)} is amazing! 💯
+ * Math formula ✅
+ * Variables ✅ define variables in a tildeblock and type %greeting% = hai, then use %greeting% anywhere below and it will be parsed into hai. 
+ */
