@@ -8,32 +8,32 @@ mdex.js supports the following Markdown syntax features:
 
 - [Basic Syntax](https://www.markdownguide.org/basic-syntax/):
   - Headings (excluding alternate syntax, `---`)
-  - Bold (using `^` instead of `**`)
-  - Italic
+  - **Bold** (using `^` instead of `**`)
+  - *Italic*
   - Blockquote (Nested blockquote not supported)
   - Lists (ordered and unordered)
-  - Code
+  - `Code`
   - Horizontal Rule
   - Link
   - Images
 
 - [Extended Syntax](https://www.markdownguide.org/extended-syntax/):
-  - Strikethrough
+  - ~~Strikethrough~~
   - Tables
-  - Footnotes
+  - <sup>[Footnotes](https://github.com/Feedekaiser/mdex/wiki/Extended-Features#footnotes)</sup>
   - Heading IDs
   - Definition Lists
-  - Task Lists (support not confirmed, very specific use case)
-  - Emoji (will not support)
-  - Highlight
-  - Subscript & Superscript
+  - Task Lists (not yet. might not support)
+  - Emoji (not yet. might not support)
+  - <mark>Highlight</mark>
+  - <sub>Subscript</sub> & <sup>Superscript</sup>
   - Automatic URL Linking (escaped using `\` instead of backtick)
   - Fenced Code Blocks
 
 - Extended-Extended Features:
-  - Underline (using `_`)
+  - <ins>Underline</ins> (using `_`)
   - Spoiler (using `|`)
-  - Furigana (using curly braces `{}` with readings in parentheses) e.g., `{明日(あす)}` or `{明(あ)日(す)}`.
+  - Furigana <ruby>振<rp>(</rp><rt>ふ</rt><rp>)</rp></ruby>り<ruby>仮<rp>(</rp><rt>が</rt><rp>)</rp>名<rp>(</rp><rt>な</rt><rp>)</rp></ruby> (using curly braces `{}` with readings in parentheses) e.g., `{明日(あす)}` or `{明(あ)日(す)}`.
   - Math formula
   - Variables (defined in tilde blocks using `%variable_name% = value`)
 
