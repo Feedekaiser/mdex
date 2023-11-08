@@ -1,4 +1,4 @@
-// roadmap in the bottom
+// refer to the bottom for details.
 
 const tree_node = (type, value) => 
 {
@@ -43,7 +43,7 @@ const math_parse = {}; {
 					++i; tokens.push([`​${check_and_build((cc) => cc != 0x26)} ​`, "mtext"]); ++i; // zwsp at the end and start to make html render the space (if any) at end and start
 					break;
 				case 0x2A: // '*'
-					tokens.push(["·", "mi"])
+					tokens.push(["·", "mi"]);
 				case 0x20: // space
 					++i; break;
 				// '0', '1', ..., '9'
@@ -144,6 +144,13 @@ const NOTE_ID_PREFIX = "_note:";
 const CONTAINER_NODE_TYPE = "_cont";
 const UNDEFINED_VAR_WARNING = "!UNDEFINED_VARIABLE!";
 const INDENTED_LINE     = /^(?:(?:\s{4})|\t)(.+)/;
+const TASK_LIST         = /^\[(.)\](.*)/;
+const TASK_LIST_STATE   = {
+	x : "checked",
+	X : "checked",
+	'+' : "checked",
+	'-' : "indeterminate",
+};
 const RUBY_PAIR         = /(.+?)(?<!\\)(?:\\\\)*\((.+?)\)/g;
 const DL_DD             = /^:\s(.+)/;
 const TABLE_CAPTION     = /^\^(.+)/;
@@ -154,6 +161,18 @@ const TABLE_HEADER      = "#";
 const TABLE_FOOTER      = "<-";
 const TABLE_MERGE_MATCH = /^{(?:(\d+)?(?:x(\d+))?)?}(.+)/;
 const VARBLOCK_SETVAR   = /^%(\w+?)%\s=\s(.+)$/;
+
+/* https://gist.github.com/cherryblossom000/195c9ee047b85493210bd4d689920899
+let line = "";
+for (let i = 0; i < $0.rows.length; ++i) 
+{
+	const key = $0.rows[i].cells[1].innerText;
+	const value = $0.rows[i].cells[0].innerText;
+	for (const k of key.split("\n")) line += (`${k}:"${value}",`);
+}
+console.log(line);
+ */
+const EMOJI_LIST = {angry:"😠",blush:"😊",broken_heart:"💔",confused:"😕",cry:"😢",frowning:"😦",heart:"❤️",imp:"👿",innocent:"😇",joy:"😂",kissing:"😗",laughing:"😆",neutral_face:"😐",open_mouth:"😮",rage:"😡",smile:"😄",smiling_face_with_tear:"🥲",slight_smile:"🙂",smiling_imp:"😈",sob:"😭",stuck_out_tongue:"😛",sunglasses:"😎",sweat:"😓",sweat_smile:"😅",unamused:"😒",wink:"😉",laughing:"😆",satisfied:"😆",rofl:"🤣",rolling_on_the_floor_laughing:"🤣",slight_smile:"🙂",slightly_smiling_face:"🙂",upside_down:"🙃",upside_down_face:"🙃",nerd:"🤓",nerd_face:"🤓",slight_frown:"🙁",slightly_frowning_face:"🙁",frowning2:"☹️",white_frowning_face:"☹️",hugging:"🤗",hugging_face:"🤗",thinking:"🤔",thinking_face:"🤔",lying_face:"🤥",liar:"🤥",rolling_eyes:"🙄",face_with_rolling_eyes:"🙄",drooling_face:"🤤",drool:"🤤",zipper_mouth:"🤐",zipper_mouth_face:"🤐",nauseated_face:"🤢",sick:"🤢",sneezing_face:"🤧",sneeze:"🤧",thermometer_face:"🤒",face_with_thermometer:"🤒",head_bandage:"🤕",face_with_head_bandage:"🤕",money_mouth:"🤑",money_mouth_face:"🤑",cowboy:"🤠",face_with_cowboy_hat:"🤠",clown:"🤡",clown_face:"🤡",poop:"💩",shit:"💩",hankey:"💩",poo:"💩",skull:"💀",skeleton:"💀",skull_crossbones:"☠️",skull_and_crossbones:"☠️",robot:"🤖",robot_face:"🤖",handshake:"🤝",shaking_hands:"🤝",thumbsup:"👍","+1":"👍",thumbup:"👍",thumbsdown:"👎","-1":"👎",thumbdown:"👎",left_facing_fist:"🤛",left_fist:"🤛",right_facing_fist:"🤜",right_fist:"🤜",fingers_crossed:"🤞",hand_with_index_and_middle_finger_crossed:"🤞",metal:"🤘",sign_of_the_horns:"🤘",raised_back_of_hand:"🤚",back_of_hand:"🤚",hand_splayed:"🖐️",raised_hand_with_fingers_splayed:"🖐️",vulcan:"🖖",raised_hand_with_part_between_middle_and_ring_fingers:"🖖",call_me:"🤙",call_me_hand:"🤙",middle_finger:"🖕",reversed_hand_with_middle_finger_extended:"🖕",speaking_head:"🗣️",speaking_head_in_silhouette:"🗣️",blond_haired_person:"👱",person_with_blond_hair:"👱",older_woman:"👵",grandma:"👵",man_with_chinese_cap:"👲",man_with_gua_pi_mao:"👲",person_wearing_turban:"👳",man_with_turban:"👳",police_officer:"👮",cop:"👮",guard:"💂",guardsman:"💂",detective:"🕵️",spy:"🕵️",sleuth_or_spy:"🕵️",woman_with_veil:"👰‍♀️",bride_with_veil:"👰‍♀️",mrs_claus:"🤶",mother_christmas:"🤶",pregnant_woman:"🤰",expecting_woman:"🤰",person_bowing:"🙇",bow:"🙇",person_tipping_hand:"💁",information_desk_person:"💁",person_gesturing_no:"🙅",no_good:"🙅",person_raising_hand:"🙋",raising_hand:"🙋",person_facepalming:"🤦",face_palm:"🤦",facepalm:"🤦",person_shrugging:"🤷",shrug:"🤷",person_pouting:"🙎",person_with_pouting_face:"🙎",person_getting_haircut:"💇",haircut:"💇",person_getting_massage:"💆",massage:"💆",man_dancing:"🕺",male_dancer:"🕺",people_with_bunny_ears_partying:"👯",dancers:"👯",levitate:"🕴️",man_in_business_suit_levitating:"🕴️",person_walking:"🚶",walking:"🚶",person_running:"🏃",runner:"🏃",couple_ww:"👩‍❤️‍👩",couple_with_heart_ww:"👩‍❤️‍👩",couple_mm:"👨‍❤️‍👨",couple_with_heart_mm:"👨‍❤️‍👨",kiss_ww:"👩‍❤️‍💋‍👩",couplekiss_ww:"👩‍❤️‍💋‍👩",kiss_mm:"👨‍❤️‍💋‍👨",couplekiss_mm:"👨‍❤️‍💋‍👨",helmet_with_cross:"⛑️",helmet_with_white_cross:"⛑️",kiwi:"🥝",kiwifruit:"🥝",french_bread:"🥖",baguette_bread:"🥖",cheese:"🧀",cheese_wedge:"🧀",hotdog:"🌭",hot_dog:"🌭",stuffed_flatbread:"🥙",stuffed_pita:"🥙",salad:"🥗",green_salad:"🥗",shallow_pan_of_food:"🥘",paella:"🥘",custard:"🍮",pudding:"🍮",flan:"🍮",peanuts:"🥜",shelled_peanut:"🥜",milk:"🥛",glass_of_milk:"🥛",champagne_glass:"🥂",clinking_glass:"🥂",tumbler_glass:"🥃",whisky:"🥃",champagne:"🍾",bottle_with_popping_cork:"🍾",fork_knife_plate:"🍽️",fork_and_knife_with_plate:"🍽️",heart_exclamation:"❣️",heavy_heart_exclamation_mark_ornament:"❣️",peace:"☮️",peace_symbol:"☮️",cross:"✝️",latin_cross:"✝️",place_of_worship:"🛐",worship_symbol:"🛐",atom:"⚛️",atom_symbol:"⚛️",radioactive:"☢️",radioactive_sign:"☢️",biohazard:"☣️",biohazard_sign:"☣️",octagonal_sign:"🛑",stop_sign:"🛑",asterisk:"*️⃣",keycap_asterisk:"*️⃣",eject:"⏏️",eject_symbol:"⏏️",pause_button:"⏸️",double_vertical_bar:"⏸️",track_next:"⏭️",next_track:"⏭️",track_previous:"⏮️",previous_track:"⏮️",speech_left:"🗨️",left_speech_bubble:"🗨️",anger_right:"🗯️",right_anger_bubble:"🗯️",mobile_phone:"📱",iphone:"📱",desktop:"🖥️",desktop_computer:"🖥️",mouse_three_button:"🖱️",three_button_mouse:"🖱️",projector:"📽️",film_projector:"📽️",microphone2:"🎙️",studio_microphone:"🎙️",timer:"⏲️",timer_clock:"⏲️",clock:"🕰️",mantlepiece_clock:"🕰️",oil:"🛢️",oil_drum:"🛢️",hammer_pick:"⚒️",hammer_and_pick:"⚒️",tools:"🛠️",hammer_and_wrench:"🛠️",dagger:"🗡️",dagger_knife:"🗡️",urn:"⚱️",funeral_urn:"⚱️",bellhop:"🛎️",bellhop_bell:"🛎️",key2:"🗝️",old_key:"🗝️",couch:"🛋️",couch_and_lamp:"🛋️",frame_photo:"🖼️",frame_with_picture:"🖼️",shopping_cart:"🛒",shopping_trolley:"🛒",e_mail:"📧",email:"📧",notepad_spiral:"🗒️",spiral_note_pad:"🗒️",calendar_spiral:"🗓️",spiral_calendar_pad:"🗓️",card_box:"🗃️",card_file_box:"🗃️",ballot_box:"🗳️",ballot_box_with_ballot:"🗳️",dividers:"🗂️",card_index_dividers:"🗂️",newspaper2:"🗞️",rolled_up_newspaper:"🗞️",paperclips:"🖇️",linked_paperclips:"🖇️",pen_ballpoint:"🖊️",lower_left_ballpoint_pen:"🖊️",pen_fountain:"🖋️",lower_left_fountain_pen:"🖋️",paintbrush:"🖌️",lower_left_paintbrush:"🖌️",crayon:"🖍️",lower_left_crayon:"🖍️",pencil:"📝",memo:"📝",ping_pong:"🏓",table_tennis:"🏓",cricket_game:"🏏",cricket_bat_ball:"🏏",goal:"🥅",goal_net:"🥅",bow_and_arrow:"🏹",archery:"🏹",boxing_glove:"🥊",boxing_gloves:"🥊",martial_arts_uniform:"🥋",karate_uniform:"🥋",person_lifting_weights:"🏋️",lifter:"🏋️",weight_lifter:"🏋️",people_wrestling:"🤼",wrestlers:"🤼",wrestling:"🤼",person_doing_cartwheel:"🤸",cartwheel:"🤸",person_bouncing_ball:"⛹️",basketball_player:"⛹️",person_with_ball:"⛹️",person_fencing:"🤺",fencer:"🤺",fencing:"🤺",person_playing_handball:"🤾",handball:"🤾",person_golfing:"🏌️",golfer:"🏌️",person_surfing:"🏄",surfer:"🏄",person_swimming:"🏊",swimmer:"🏊",person_playing_water_polo:"🤽",water_polo:"🤽",person_rowing_boat:"🚣",rowboat:"🚣",person_mountain_biking:"🚵",mountain_bicyclist:"🚵",person_biking:"🚴",bicyclist:"🚴",first_place:"🥇",first_place_medal:"🥇",second_place:"🥈",second_place_medal:"🥈",third_place:"🥉",third_place_medal:"🥉",medal:"🏅",sports_medal:"🏅",tickets:"🎟️",admission_tickets:"🎟️",person_juggling:"🤹",juggling:"🤹",juggler:"🤹",drum:"🥁",drum_with_drumsticks:"🥁",rainbow_flag:"🏳️‍🌈", gay_pride_flag:"🏳️‍🌈",race_car:"🏎️",racing_car:"🏎️",motor_scooter:"🛵",motorbike:"🛵",motorcycle:"🏍️",racing_motorcycle:"🏍️",airplane_small:"🛩️",small_airplane:"🛩️",canoe:"🛶",kayak:"🛶",cruise_ship:"🛳️",passenger_ship:"🛳️",map:"🗺️",world_map:"🗺️",beach_umbrella:"⛱️",umbrella_on_ground:"⛱️",beach:"🏖️",beach_with_umbrella:"🏖️",island:"🏝️",desert_island:"🏝️",mountain_snow:"🏔️",snow_capped_mountain:"🏔️",homes:"🏘️",house_buildings:"🏘️",house_abandoned:"🏚️",derelict_house_building:"🏚️",construction_site:"🏗️",building_construction:"🏗️",railway_track:"🛤️",railroad_track:"🛤️",park:"🏞️",national_park:"🏞️",city_sunset:"🌇",city_sunrise:"🌇",fox:"🦊",fox_face:"🦊",lion_face:"🦁",lion:"🦁",unicorn:"🦄",unicorn_face:"🦄",rhino:"🦏",rhinoceros:"🦏",dove:"🕊️",dove_of_peace:"🕊️",feet:"🐾",paw_prints:"🐾",wilted_rose:"🥀",wilted_flower:"🥀",fire:"🔥",flame:"🔥",cloud_tornado:"🌪️",cloud_with_tornado:"🌪️",white_sun_small_cloud:"🌤️",white_sun_with_small_cloud:"🌤️",white_sun_cloud:"🌥️",white_sun_behind_cloud:"🌥️",white_sun_rain_cloud:"🌦️",white_sun_behind_cloud_with_rain:"🌦️",cloud_rain:"🌧️",cloud_with_rain:"🌧️",thunder_cloud_rain:"⛈️",thunder_cloud_and_rain:"⛈️",cloud_lightning:"🌩️",cloud_with_lightning:"🌩️",cloud_snow:"🌨️",cloud_with_snow:"🌨️",};
 
 
 const LINE_MATCH_STRINGS = {
@@ -202,6 +221,7 @@ for (const [type, regex] of [
 	["sub",     /-(.+?)(?<!\\)(?:\\\\)*-/],
 	["mark",    /&(.+?)(?<!\\)(?:\\\\)*&/],
 	["ruby",    /{(.+?)(?<!\\)(?:\\\\)*}/],
+	["emoji",   /:([0-9_a-z\+\-]+):/],
 	["kbd",     /!(.+?)!/], // using <kbd>!</kbd> is semantically incorrect?
 	["var",     /%(\w+?)%/],
 	["math",    /@(.+?)@/],
@@ -311,6 +331,9 @@ const inner_parse_node = (line, node = tree_node("text"), variables) =>
 
 					switch (type)
 					{
+					case "emoji":
+						text_node.type = "text";
+						text_node.value = EMOJI_LIST[regex_match_result[1]] || regex_match_result[0]; break;
 					case "math":
 						text_node.tokens = math_parse.lex(regex_match_result[1]); break;
 					case "var":
@@ -497,8 +520,19 @@ export const to_tree = (str, variables = {}) =>
 					node.value = is_ol && regex_match_result[1];
 					do
 					{
-						const item_node = parse_optimize_node(regex_match_result[1 + is_ol], tree_node("li"), variables);
-						node.children.push(item_node);
+						let line = regex_match_result[1 + is_ol];
+						let item_node = tree_node("li");
+
+						{
+							let tasklist_match;
+							if (tasklist_match = line.match(TASK_LIST))
+							{
+								item_node.checkbox = TASK_LIST_STATE[tasklist_match[1]];
+								line = tasklist_match[2];
+							}
+						}
+
+						node.children.push(parse_optimize_node(line, item_node, variables));
 
 						let text_under_element = [];
 						let indented_match;
@@ -576,6 +610,7 @@ const inner_render_node = (node, parent) =>
 	switch (type)
 	{
 	// put here if need to create this element
+	case "li":
 	case "kbd":
 	case "dd":
 	case "dt":
@@ -589,7 +624,6 @@ const inner_render_node = (node, parent) =>
 	case "strong":
 	case "u":
 	case "code":
-	case "li":
 	case "sub":
 	case "sup":
 	case "mark":
@@ -600,6 +634,15 @@ const inner_render_node = (node, parent) =>
 
 		switch (type)
 		{
+		case "li":
+			if ("checkbox" in node)
+			{
+				let checkbox = create_element_and_append("input", element);
+				checkbox.type = "checkbox";
+				checkbox.disabled = 1;
+				checkbox[node.checkbox] = 1;
+			}
+			break;
 		case "a":
 			element.href = node.link;
 			if (node.hover) element.title = node.hover;
@@ -620,6 +663,7 @@ const inner_render_node = (node, parent) =>
 		case "li":
 			if (node.under_element)
 				create_element_and_append("p", append_text_to).replaceChildren(...render(node.under_element));
+
 		}
 		break;
 	case "note":
@@ -753,23 +797,43 @@ export const render = (tree) =>
  * Link ✅
  * Images ✅
  * 
- * https://www.markdownguide.org/extended-syntax/ ✅❗
+ * https://www.markdownguide.org/extended-syntax/ ✅
  * Strikethrough ✅
  * Tables ✅
  * Footnotes ✅
  * Heading IDs ✅
  * Definition Lists ✅
- * Task Lists ❓
- * Emoji ❓
+ * Task Lists ✅
+ * Emoji ✅
  * Highlight ✅ use &
  * Subscript & Superscript ✅ use - and =
  * Automatic URL Linking ✅ escape it using backslash instead of surrounding it with backticks!
  * Fenced Code Blocks ✅
  * 
- * extended-extended features: 🛠️🚧
- * Underline ✅ use _
- * Spoiler ✅ use |
- * Furigana (<ruby>) ✅ use {明日(あす)} or {明(あ)日(す)}. {振(ふ)}り{仮(が)名(な)} is amazing! 💯
- * Math formula ✅
- * Variables ✅ define variables in a tildeblock and type %greeting% = hai, then use %greeting% anywhere below and it will be parsed into hai. 
+ * extended-extended features: ✅❗ 🛠️🚧
+ * See https://github.com/Feedekaiser/mdex/wiki
  */
+
+/*
+MIT License
+
+Copyright (c) 2023 Feedekaiser
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
