@@ -5,6 +5,139 @@ const tree_node = (type, value) =>
 	return { type : type, value: value, children : [] };
 }
 
+const math_parse = {}; {
+	const MATH_FUNCTIONS = {abs:1,and:1,arccos:1,arcsin:1,arctan:1,C:1,ceil:1,cot:1,cos:1,cosh:1,csc:1,deg:1,exp:1,fact:1,floor:1,frac:"mfrac",if:1,int:1,lim:1,log:1,ln:1,max:1,min:1,or:1,over:"mover",P:1,pow:"msup",prod:1,rad:1,root:"mroot",round:1,sec:1,sgn:1,sign:1,sin:1,sinh:1,sqrt:"msqrt",sum:1,sub:"msub",subsup:"msubsup",tan:1,tanh:1,under:"munder",underover:"munderover"};
+	const MATH_ARG_COUNT = {
+		sqrt  : 1,
+		over  : 2,
+		under : 2,
+		sub   : 2,
+		frac  : 2,
+		pow   : 2,
+		root  : 2,
+		underover : 3,
+		subsup : 3,
+	};
+
+	math_parse.lex = (str) =>
+	{
+		let str_length = str.length;
+		let tokens = [];
+		{
+			let i;
+	
+			const check_and_build = (f) =>
+			{
+				let buffer = str[i];
+				while (++i < str_length && f(str.charCodeAt(i)))
+					buffer += str[i];
+				return buffer;
+			}
+	
+			for (i = 0; i < str_length;)
+			{
+				let c = str.charCodeAt(i);
+				switch (c)
+				{
+				case 0x26: // '&'
+					++i; tokens.push([`​${check_and_build((cc) => cc != 0x26)} ​`, "mtext"]); ++i; // zwsp at the end and start to make html render the space (if any) at end and start
+					break;
+				case 0x2A: // '*'
+					tokens.push(["·", "mi"])
+				case 0x20: // space
+					++i; break;
+				// '0', '1', ..., '9'
+				case 0x30: case 0x31: case 0x32: case 0x33: case 0x34:
+				case 0x35: case 0x36: case 0x37: case 0x38: case 0x39:
+					tokens.push([check_and_build((cc) => (cc >= 0x30 && cc <= 0x39) || cc == 0x2E), "mn"]);
+					break;
+	
+				// 'A', 'B', ..., 'Z'
+				case 0x41: case 0x42: case 0x43: case 0x44: case 0x45:
+				case 0x46: case 0x47: case 0x48: case 0x49: case 0x4A:
+				case 0x4B: case 0x4C: case 0x4D: case 0x4E: case 0x4F:
+				case 0x50: case 0x51: case 0x52: case 0x53: case 0x54:
+				case 0x55: case 0x56: case 0x57: case 0x58: case 0x59:
+				case 0x5A:
+	
+				// 'a', 'b', ..., 'z'
+				case 0x61: case 0x62: case 0x63: case 0x64: case 0x65:
+				case 0x66: case 0x67: case 0x68: case 0x69: case 0x6A:
+				case 0x6B: case 0x6C: case 0x6D: case 0x6E: case 0x6F:
+				case 0x70: case 0x71: case 0x72: case 0x73: case 0x74:
+				case 0x75: case 0x76: case 0x77: case 0x78: case 0x79:
+				case 0x7A:
+					let substr = check_and_build((cc) => (cc >= 0x41 && cc <= 0x5A) || (cc >= 0x61 && cc <= 0x7A));
+					if (MATH_FUNCTIONS[substr])
+						tokens.push([substr, "mi"]);
+					else
+						for (const character of substr)
+							tokens.push([character, "mi"]);
+	
+					break;
+				default:
+					tokens.push([str[i++], "mo"]);
+				}
+			}
+		}
+	
+		{
+			let bracket_stack = [];
+			for (let i = 0, token = tokens[i], idx_open; i < tokens.length; token = tokens[++i])
+				if (token[0] == '(')
+					bracket_stack.push(i);
+				else if (token[0] == ')')
+					if ((idx_open = bracket_stack.pop()) != undefined)
+						tokens[idx_open].push(i), token.push(idx_open);
+		}
+		return tokens;
+	};
+
+	math_parse.render = (tokens, start = 0, end = tokens.length) =>
+	{
+		let children = [];
+
+		const default_token_handle = (token) =>
+			create_element_and_push(token[1], children).textContent = token[0];
+
+
+		for (let i = start, current_token = tokens[i]; i < end; current_token = tokens[++i])
+		{
+			if (current_token[1] == "mtext") { default_token_handle(current_token); continue; }
+			
+			let arg_count = MATH_ARG_COUNT[current_token[0]];
+			let next_token = tokens[i + 1] || [];
+
+			if (arg_count && (next_token[0] == '('))
+			{
+				let element = create_element_and_push(MATH_FUNCTIONS[current_token[0]], children);
+				let idx_comma;
+				let start = i + 2;
+				while (--arg_count > 0)
+				{
+					for (idx_comma = start; idx_comma < end && tokens[idx_comma][0] != ','; ++idx_comma)
+						if (tokens[idx_comma][0] == '(')
+							idx_comma = tokens[idx_comma][2];
+
+					element.appendChild(math_parse.render(tokens, start, idx_comma));
+					start = idx_comma + 1;
+				}
+
+				element.appendChild(math_parse.render(tokens, (idx_comma + 1) || start, next_token[2]));
+				i = next_token[2];
+				continue;
+			}
+
+			default_token_handle(current_token);
+		}
+		if (children.length == 1) return children[0];
+		
+		let mrow = document.createElement("mrow");
+		mrow.replaceChildren(...children);
+		return mrow;
+	};
+}
+
 const EMPTY_ARR = []; // do NOT touch this.
 const EMPTY_STRING = "";
 const NOTE_ID_PREFIX = "_note:";
@@ -16,7 +149,9 @@ const DL_DD             = /^:\s(.+)/;
 const TABLE_CAPTION     = /^\^(.+)/;
 const TABLE_LEFT_ALIGN  = ":<";
 const TABLE_RIGHT_ALIGN = ">:";
+const TABLE_DATA_HEADER = "#";
 const TABLE_HEADER      = "#";
+const TABLE_FOOTER      = "<-";
 const TABLE_MERGE_MATCH = /^{(?:(\d+)?(?:x(\d+))?)?}(.+)/;
 const VARBLOCK_SETVAR   = /^%(\w+?)%\s=\s(.+)$/;
 
@@ -67,6 +202,7 @@ for (const [type, regex] of [
 	["sub",     /-(.+?)(?<!\\)(?:\\\\)*-/],
 	["mark",    /&(.+?)(?<!\\)(?:\\\\)*&/],
 	["ruby",    /{(.+?)(?<!\\)(?:\\\\)*}/],
+	["kbd",     /!(.+?)!/], // using <kbd>!</kbd> is semantically incorrect?
 	["var",     /%(\w+?)%/],
 	["math",    /@(.+?)@/],
 	["note",    /\[\^(.+?)\s*(?:"(.+)")?\]/],
@@ -138,81 +274,6 @@ const optimize_node = (master_node) =>
 	return master_node;
 };
 
-const MATH_FUNCTIONS = {abs:1,and:1,arccos:1,arcsin:1,arctan:1,C:1,ceil:1,cot:1,cos:1,cosh:1,csc:1,deg:1,exp:1,fact:1,floor:1,frac:"mfrac",if:1,int:1,lim:1,log:1,ln:1,max:1,min:1,or:1,over:"mover",P:1,pow:"msup",prod:1,rad:1,root:"mroot",round:1,sec:1,sgn:1,sign:1,sin:1,sinh:1,sqrt:"msqrt",sum:1,sub:"msub",subsup:"msubsup",tan:1,tanh:1,under:"munder",underover:"munderover"};
-
-const math_lex = (str) =>
-{
-	let str_length = str.length;
-	let tokens = [];
-	{
-		let i;
-
-		const check_and_build = (f) =>
-		{
-			let buffer = str[i];
-			while (++i < str_length && f(str.charCodeAt(i)))
-				buffer += str[i];
-			return buffer;
-		}
-
-		for (i = 0; i < str_length;)
-		{
-			let c = str.charCodeAt(i);
-			switch (c)
-			{
-			case 0x26: // '&'
-				++i; tokens.push([`​${check_and_build((cc) => cc != 0x26)} ​`, "mtext"]); ++i; // zwsp at the end and start
-				break;
-			case 0x2A: // '*'
-				tokens.push(['·', "mi"])
-			case 0x20: // space
-				++i; break;
-			// '0', '1', ..., '9'
-			case 0x30: case 0x31: case 0x32: case 0x33: case 0x34:
-			case 0x35: case 0x36: case 0x37: case 0x38: case 0x39:
-				tokens.push([check_and_build((cc) => (cc >= 0x30 && cc <= 0x39) || cc == 0x2E), 'mn']);
-				break;
-
-			// 'A', 'B', ..., 'Z'
-			case 0x41: case 0x42: case 0x43: case 0x44: case 0x45:
-			case 0x46: case 0x47: case 0x48: case 0x49: case 0x4A:
-			case 0x4B: case 0x4C: case 0x4D: case 0x4E: case 0x4F:
-			case 0x50: case 0x51: case 0x52: case 0x53: case 0x54:
-			case 0x55: case 0x56: case 0x57: case 0x58: case 0x59:
-			case 0x5A:
-
-			// 'a', 'b', ..., 'z'
-			case 0x61: case 0x62: case 0x63: case 0x64: case 0x65:
-			case 0x66: case 0x67: case 0x68: case 0x69: case 0x6A:
-			case 0x6B: case 0x6C: case 0x6D: case 0x6E: case 0x6F:
-			case 0x70: case 0x71: case 0x72: case 0x73: case 0x74:
-			case 0x75: case 0x76: case 0x77: case 0x78: case 0x79:
-			case 0x7A:
-				let substr = check_and_build((cc) => (cc >= 0x41 && cc <= 0x5A) || (cc >= 0x61 && cc <= 0x7A));
-				if (MATH_FUNCTIONS[substr])
-					tokens.push([substr, 'mi']);
-				else
-					for (const character of substr)
-						tokens.push([character, 'mi']);
-
-				break;
-			default:
-				tokens.push([str[i++], 'mo']);
-			}
-		}
-	}
-
-	{
-		let bracket_stack = [];
-		for (let i = 0, token = tokens[i], idx_open; i < tokens.length; token = tokens[++i])
-			if (token[0] == '(')
-				bracket_stack.push(i);
-			else if (token[0] == ')')
-				if ((idx_open = bracket_stack.pop()) != undefined)
-					tokens[idx_open].push(i), token.push(idx_open);
-	}
-	return tokens;
-};
 
 const parse_optimize_node = (line, node, variables) => optimize_node(inner_parse_node(line, node, variables));
 
@@ -251,7 +312,7 @@ const inner_parse_node = (line, node = tree_node("text"), variables) =>
 					switch (type)
 					{
 					case "math":
-						text_node.tokens = math_lex(regex_match_result[1]); break;
+						text_node.tokens = math_parse.lex(regex_match_result[1]); break;
 					case "var":
 						text_node = variables[regex_match_result[1]] || tree_node("text", UNDEFINED_VAR_WARNING); break;
 					case "ruby":
@@ -334,6 +395,8 @@ export const to_tree = (str, variables = {}) =>
 				case "table":
 					if (is_escaped(arr[i], arr[i].length - 1)) { node.type = undefined; break check_match_strings; };
 
+					node.thead = [];
+					node.tfoot = [];
 					do
 					{
 						let row = regex_match_result[1] + "|";
@@ -363,7 +426,7 @@ export const to_tree = (str, variables = {}) =>
 							}
 							else data_node.align = "center";
 
-							if (this_part.startsWith(TABLE_HEADER))
+							if (this_part.startsWith(TABLE_DATA_HEADER))
 							{
 								data_node.type = "th";
 								this_part = this_part.substring(1);
@@ -381,7 +444,14 @@ export const to_tree = (str, variables = {}) =>
 
 							last = j++;
 						}
-						node.children.push(tr_node);
+
+						if (arr[i].endsWith(TABLE_FOOTER))
+							node.tfoot.push(tr_node);
+						else if (arr[i].endsWith(TABLE_HEADER))
+							node.thead.push(tr_node);
+						else
+							node.children.push(tr_node);
+						
 					} while (++i < arr_length && (regex_match_result = arr[i].match(match_string)));
 
 					if (i < arr_length && (regex_match_result = arr[i].match(TABLE_CAPTION)))
@@ -497,61 +567,6 @@ const create_element_and_push = (type, arr) =>
 	return element;
 };
 
-const MATH_ARG_COUNT = {
-	sqrt  : 1,
-	over  : 2,
-	under : 2,
-	sub   : 2,
-	frac  : 2,
-	pow   : 2,
-	root  : 2,
-	underover : 3,
-	subsup : 3,
-}
-
-const math_render = (tokens, start = 0, end = tokens.length) =>
-{
-	let children = [];
-
-	const default_token_handle = (token) =>
-		create_element_and_push(token[1], children).textContent = token[0];
-
-
-	for (let i = start, current_token = tokens[i]; i < end; current_token = tokens[++i])
-	{
-		if (current_token[1] == "mtext") { default_token_handle(current_token); continue; }
-		
-		let arg_count = MATH_ARG_COUNT[current_token[0]];
-		let next_token = tokens[i + 1] || [];
-
-		if (arg_count && (next_token[0] == '('))
-		{
-			let element = create_element_and_push(MATH_FUNCTIONS[current_token[0]], children);
-			let idx_comma;
-			let start = i + 2;
-			while (--arg_count > 0)
-			{
-				for (idx_comma = start; idx_comma < end && tokens[idx_comma][0] != ','; ++idx_comma)
-					if (tokens[idx_comma][0] == '(')
-						idx_comma = tokens[idx_comma][2];
-
-				element.appendChild(math_render(tokens, start, idx_comma));
-				start = idx_comma + 1;
-			}
-
-			element.appendChild(math_render(tokens, (idx_comma + 1) || start, next_token[2]));
-			i = next_token[2];
-			continue;
-		}
-
-		default_token_handle(current_token);
-	}
-	if (children.length == 1) return children[0];
-	
-	let mrow = document.createElement("mrow");
-	mrow.replaceChildren(...children);
-	return mrow;
-};
 
 const inner_render_node = (node, parent) =>
 {
@@ -561,6 +576,7 @@ const inner_render_node = (node, parent) =>
 	switch (type)
 	{
 	// put here if need to create this element
+	case "kbd":
 	case "dd":
 	case "dt":
 	case "tr":
@@ -624,7 +640,7 @@ const inner_render_node = (node, parent) =>
 		}
 		break;
 	case "math":
-		create_element_and_append("math", parent).replaceChildren(math_render(node.tokens));
+		create_element_and_append("math", parent).replaceChildren(math_parse.render(node.tokens));
 		break;
 	case "img":
 		if (node.link)
@@ -693,14 +709,30 @@ export const render = (tree) =>
 		case "dl":
 		case "table":
 			let list = create_element_and_push(type, children_nodes);
-			node.children.forEach((child) => inner_render_node(child, list));
 
-			// implement as switch later if changes.
-			if (type == "ol" && node.value != "1")
-				list.start = node.value;
-			
-			if (type == "table" && node.caption)
-				inner_render_node(node.caption, list);
+			switch (type)
+			{
+			case "table":
+				if (node.caption)
+					inner_render_node(node.caption, list);
+
+				const render_nodes = (arr, parent_tag) => 
+				{
+					let tag = create_element_and_append(parent_tag, list);
+					arr.forEach((node) => inner_render_node(node, tag));
+				};
+
+				if (node.thead.length > 0) render_nodes(node.thead, "thead");
+			 /* if (node.children.length > 0) */render_nodes(node.children, "tbody"); // not worth checking
+				if (node.tfoot.length > 0) render_nodes(node.tfoot, "tfoot");
+
+				break;
+			case "ol":
+				if (node.value != "1")
+					list.start = node.value;
+			default:
+				node.children.forEach((child) => inner_render_node(child, list));
+			}
 		}
 	}
 
