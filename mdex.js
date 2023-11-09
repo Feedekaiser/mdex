@@ -44,7 +44,7 @@ const LINE_MATCH_STRINGS = {
 	ul : /^[-\*+]\s(.+)/,
 	dl : /^\/(.+)/,
 	h  : /^(#{1,6})\s(.+?)(?:\s#(.*))?$/,
-	blockquote : /^>\s(.+)/,
+	blockquote : /^>(.*)/,
 	note_desc  : /^\[\^(.+?)\s*(?:"(.+)")?\]:\s(.+)/,
 	codeblock  : /^`{3,}$/,
 	varblock   : /^~{3}$/,
@@ -89,7 +89,7 @@ for (const [type, regex] of [
 	["var",     /%(\w+?)%/],
 	["math",    /@(.+?)@/],
 	["note",    /\[\^(.+?)\s*(?:"(.+)")?\]/],
-	["link",    /https?:\/\/\S+\.\S\S+/],
+	["link",    /https?:\/\/\S+/],
 	["code",    /`(.+?)`/],
 ])
 {
@@ -381,10 +381,11 @@ export const to_tree = (str, variables = {}) =>
 					i = j + 1;
 					break check_match_strings;
 				case "blockquote":
-					do
-					{
-						node.children.push(parse_optimize_node(regex_match_result[1], tree_node("div"), variables));
-					} while (++i < arr_length && (regex_match_result = arr[i].match(match_string)));
+					let lines = [regex_match_result[1]];
+					while (++i < arr_length && (regex_match_result = arr[i].match(match_string)))
+						lines.push(regex_match_result[1]);
+
+					node.children = to_tree(lines.join("\n"), variables);
 					break check_match_strings;
 				case "ol":
 				case "ul":
@@ -418,9 +419,10 @@ export const to_tree = (str, variables = {}) =>
 					node.children.push(regex_match_result[2] ? parse_optimize_node(regex_match_result[2] + ": ", undefined, variables) : tree_node("text", regex_match_result[1] + ": "));
 					node.children.push(parse_optimize_node(regex_match_result[3], tree_node("span"), variables));
 
+					// TODO: MAKE THIS DISCRETE AND USE TO_TREE HERE AGAIN
 					let indented_match;
 					while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
-						node.children.push(parse_optimize_node(indented_match[1], tree_node("div"), variables));
+						node.children.push(parse_optimize_node(indented_match[1], tree_node("p"), variables));
 					
 					break check_match_strings;
 				case "h":
@@ -498,6 +500,8 @@ const inner_render_node = (node, parent) =>
 		inner_render_node_default(node, append_text_to);
 		break;
 	// put here if need to create this element
+	case "blockquote":
+	case "p":
 	case "li":
 	case "kbd":
 	case "dd":
@@ -550,6 +554,7 @@ const inner_render_node = (node, parent) =>
 		case "li":
 			if (node.under_element)
 				create_element_and_append("div", append_text_to).replaceChildren(...render(node.under_element));
+			break;
 		}
 		break;
 	case "note":
@@ -615,7 +620,6 @@ export const render = (tree) =>
 		let append_text_to = children_nodes;
 		switch (type)
 		{
-		case "p":
 		case "hr":
 		case "h1":
 		case "h2":
@@ -623,17 +627,17 @@ export const render = (tree) =>
 		case "h4":
 		case "h5":
 		case "h6":
-		case "blockquote":
 			let element = document.createElement(type);
 			append_text_to = element;
 
 			if (node.id) element.id = node.id;
-			inner_render_node(node, append_text_to); 
+			inner_render_node_default(node, append_text_to); 
 			children_nodes.push(element);
 			break;
+		case "p":
+			inner_render_node_default(node, create_element_and_push("p", children_nodes)); break;
 		case "codeblock":
-			create_element_and_append("code", create_element_and_push("pre", children_nodes)).textContent = node.value;
-			break;
+			create_element_and_append("code", create_element_and_push("pre", children_nodes)).textContent = node.value; break;
 		case "note_desc":
 			let p = create_element_and_push("p", children_nodes);
 			p.classList.add("mdex_note");
@@ -643,6 +647,7 @@ export const render = (tree) =>
 		case "ul":
 		case "ol":
 		case "dl":
+		case "blockquote":
 		case "table":
 			let list = create_element_and_push(type, children_nodes);
 
@@ -669,7 +674,6 @@ export const render = (tree) =>
 			default:
 				node.children.forEach((child) => inner_render_node(child, list));
 			}
-			break;
 		}
 	}
 
@@ -813,12 +817,11 @@ const math_parse = {}; {
 
 
 /*
- * https://www.markdownguide.org/basic-syntax/ ✅❗
+ * https://www.markdownguide.org/basic-syntax/ ✅
  * Headings ✅ will not support alternate syntax.
  * Bold ✅ use ^ instead of **
  * Italic ✅
- * Blockquote ✅
- * Nested blockquote ❌ rare + is ambiguous by nature without adding extra controls.
+ * (Nested) Blockquote ✅
  * (Nested) List ✅
  * Code ✅
  * Horizontal Rule ✅
