@@ -5,7 +5,7 @@ const tree_node = (type, value) =>
 	return { type : type, value: value, children : [] };
 }
 
-const EMPTY_ARR = []; // do NOT touch this.
+const EMPTY_ARR = []; // do NOT touch this. it should always have 0 elements.
 const EMPTY_STRING = "";
 const NOTE_ID_PREFIX = "_note:";
 const CONTAINER_NODE_TYPE = "_cont";
@@ -255,11 +255,11 @@ const inner_parse_node = (line, node = tree_node("text"), variables) =>
 
 
 /**
- * @param {string} str input string to be rendered
+ * @param {string|Array} str input string to be rendered. when `split` is falsy, it will parse `str` as an array of strings instead.
  */
-export const to_tree = (str, variables = {}) =>
+export const to_tree = (str, variables = {}, split = true) =>
 {
-	let arr = str.split("\n");
+	let arr = split ? str.split("\n") : str;
 	let tree = [];
 	let regex_match_result;
 	let previous_p_node;
@@ -285,6 +285,19 @@ export const to_tree = (str, variables = {}) =>
 			{
 				node.type = type;
 				previous_p_node = null;
+
+				const under_element_nest = (node) =>
+				{
+					let under_element = [];
+					let match;
+
+					while (++i < arr_length && (match = arr[i].match(INDENTED_LINE)))
+						under_element.push(match[1]);
+
+					if (under_element.length > 0)
+						node.under_element = to_tree(under_element, variables, false);
+				};
+
 				switch (type)
 				{
 				case "table":
@@ -340,6 +353,7 @@ export const to_tree = (str, variables = {}) =>
 							last = j++;
 						}
 
+
 						if (arr[i].endsWith(TABLE_FOOTER))
 							node.tfoot.push(tr_node);
 						else if (arr[i].endsWith(TABLE_HEADER))
@@ -385,7 +399,7 @@ export const to_tree = (str, variables = {}) =>
 					while (++i < arr_length && (regex_match_result = arr[i].match(match_string)))
 						lines.push(regex_match_result[1]);
 
-					node.children = to_tree(lines.join("\n"), variables);
+					node.children = to_tree(lines, variables, false);
 					break check_match_strings;
 				case "ol":
 				case "ul":
@@ -406,24 +420,22 @@ export const to_tree = (str, variables = {}) =>
 						}
 
 						node.children.push(parse_optimize_node(line, item_node, variables));
-
-						let text_under_element = [];
-						let indented_match;
-						while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
-							text_under_element.push(indented_match[1]);
-						if (text_under_element.length > 0) item_node.under_element = to_tree(text_under_element.join("\n"), variables);
+						under_element_nest(item_node);
 					} while (i < arr_length && (regex_match_result = arr[i].match(match_string)))
 					break check_match_strings;
 				case "note_desc":
 					node.id = regex_match_result[1];
-					node.children.push(regex_match_result[2] ? parse_optimize_node(regex_match_result[2] + ": ", undefined, variables) : tree_node("text", regex_match_result[1] + ": "));
-					node.children.push(parse_optimize_node(regex_match_result[3], tree_node("span"), variables));
 
-					// TODO: MAKE THIS DISCRETE AND USE TO_TREE HERE AGAIN
-					let indented_match;
-					while (++i < arr_length && (indented_match = arr[i].match(INDENTED_LINE)))
-						node.children.push(parse_optimize_node(indented_match[1], tree_node("p"), variables));
-					
+					node.children.push(
+						regex_match_result[2] ? 
+							parse_optimize_node(regex_match_result[2] + ": ", undefined, variables) :
+							tree_node("text", regex_match_result[1] + ": ")
+						
+						, 
+						parse_optimize_node(regex_match_result[3], tree_node("text"), variables)
+					);
+
+					under_element_nest(node);
 					break check_match_strings;
 				case "h":
 					node.type += regex_match_result[1].length;
@@ -465,13 +477,6 @@ const inner_render_node_default = (node, parent) =>
 	node.value && parent.appendChild(document.createTextNode(node.value));
 	node.children.forEach(child => inner_render_node(child, parent));
 }
-// not used for performance reason its 15% slower
-// const create_create_element_and_method = (method) => (type, o) =>
-// {
-// 	const element = document.createElement(type);
-// 	o[method](element);
-// 	return element;
-// }
 
 const create_element_and_append = (type, parent) =>
 {
@@ -551,6 +556,7 @@ const inner_render_node = (node, parent) =>
 
 		switch(type)
 		{
+		case "note_desc":
 		case "li":
 			if (node.under_element)
 				create_element_and_append("div", append_text_to).replaceChildren(...render(node.under_element));
@@ -575,14 +581,9 @@ const inner_render_node = (node, parent) =>
 		}
 		break;
 	case "math":
-		// use this for the time being. both chrome and firefox just wouldn't recognize this as a math element.
-		let math = document.createElement("math");
-		let temp = document.createElement("div");
+		let math = document.createElementNS("http://www.w3.org/1998/Math/MathML", "math");
 		math.appendChild(math_parse.render(node.tokens));
-		temp.appendChild(math);
-		create_element_and_append("span", parent).innerHTML = temp.innerHTML;
-
-		//create_element_and_append("math", parent).appendChild(math_parse.render(node.tokens));
+		parent.appendChild(math);
 		break;
 	case "img":
 		if (node.link)
@@ -617,7 +618,6 @@ export const render = (tree) =>
 	for (const node of tree)
 	{
 		let type = node.type;
-		let append_text_to = children_nodes;
 		switch (type)
 		{
 		case "hr":
@@ -627,22 +627,19 @@ export const render = (tree) =>
 		case "h4":
 		case "h5":
 		case "h6":
-			let element = document.createElement(type);
-			append_text_to = element;
-
+			let element = create_element_and_push(type, children_nodes);
 			if (node.id) element.id = node.id;
-			inner_render_node_default(node, append_text_to); 
-			children_nodes.push(element);
+			inner_render_node_default(node, element);
 			break;
 		case "p":
 			inner_render_node_default(node, create_element_and_push("p", children_nodes)); break;
 		case "codeblock":
 			create_element_and_append("code", create_element_and_push("pre", children_nodes)).textContent = node.value; break;
 		case "note_desc":
-			let p = create_element_and_push("p", children_nodes);
-			p.classList.add("mdex_note");
-			p.id = NOTE_ID_PREFIX + node.id;
-			inner_render_node(node, p);
+			let div = create_element_and_push("div", children_nodes);
+			div.classList.add("mdex_note");
+			div.id = NOTE_ID_PREFIX + node.id;
+			inner_render_node(node, div);
 			break;
 		case "ul":
 		case "ol":
@@ -769,12 +766,19 @@ const math_parse = {}; {
 		return tokens;
 	};
 
+	const create_math_element_and_push = (type, arr) =>
+	{
+		let element = document.createElementNS("http://www.w3.org/1998/Math/MathML", type);
+		arr.push(element);
+		return element;
+	};
+
 	math_parse.render = (tokens, start = 0, end = tokens.length) =>
 	{
 		let children = [];
 
 		const default_token_handle = (token) =>
-			create_element_and_push(token[1], children).textContent = token[0];
+			create_math_element_and_push(token[1], children).textContent = token[0];
 
 
 		for (let i = start, current_token = tokens[i]; i < end; current_token = tokens[++i])
@@ -782,11 +786,11 @@ const math_parse = {}; {
 			if (current_token[1] == "mtext") { default_token_handle(current_token); continue; }
 			
 			let arg_count = MATH_ARG_COUNT[current_token[0]];
-			let next_token = tokens[i + 1] || [];
+			let next_token = tokens[i + 1] || EMPTY_ARR;
 
 			if (arg_count && (next_token[0] == '('))
 			{
-				let element = create_element_and_push(MATH_FUNCTIONS[current_token[0]], children);
+				let element = create_math_element_and_push(MATH_FUNCTIONS[current_token[0]], children);
 				let idx_comma;
 				let start = i + 2;
 				while (--arg_count > 0)
@@ -806,9 +810,12 @@ const math_parse = {}; {
 
 			default_token_handle(current_token);
 		}
+
+
 		if (children.length == 1) return children[0];
-		
-		let mrow = document.createElement("mrow");
+
+
+		let mrow = document.createElementNS("http://www.w3.org/1998/Math/MathML", "mrow");
 		mrow.replaceChildren(...children);
 		return mrow;
 	};
