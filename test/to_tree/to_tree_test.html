@@ -1,0 +1,353 @@
+<script type="module">
+	import {to_tree} from "/mdex.js";
+	import {test} from "../test_func.js";
+
+	const no = void 0;
+	const node = (type, value = undefined, ...children) => { return {type : type, value : value, children : children}; };
+	const add_property = (o, properties) => {
+		Object.entries(properties).forEach(([k, v]) => o[k] = v);
+		return o;
+	}
+
+	test("zero arguments", true, no, () => to_tree());
+	test("empty string", false, [], () => to_tree(""));
+
+	test("node.value equal to line if no formatting", false, [
+		node("p", "input")
+	], () => to_tree("input"));
+
+	test("node.value is undefined if there is formatting", false, [
+		node("p", no, node("em", "input"))
+	], () => to_tree("*input*"));
+
+	test("formatting", false, [
+		node("p", no, 
+			node("text", "a"),
+			node("em", "b"),
+			node("text", "c"),
+			node("em", "d"),
+			node("_cont", "e"),
+		)
+	], () => to_tree("a*b*c*d*e"));
+
+	test("nested formatting", false, [
+		node("p", no,
+			node("em", no, 
+				node("text", "a"),
+				node("del", no,
+					node("text", "b"),
+					node("u", "c"),
+					node("_cont", "b"),
+				),
+				node("_cont", "a"),
+			)
+		)
+	], () => to_tree("*a~b_c_b~a*"));
+
+	test("is not heading if no space", false, [node("p", "#a")], () => to_tree("#a"));
+	test("h1", false, [node("h1", "a")], () => to_tree("# a"));
+	test("h2", false, [node("h2", "a")], () => to_tree("## a"));
+	test("h3", false, [node("h3", "a")], () => to_tree("### a"));
+	test("h4", false, [node("h4", "a")], () => to_tree("#### a"));
+	test("h5", false, [node("h5", "a")], () => to_tree("##### a"));
+	test("h6", false, [node("h6", "a")], () => to_tree("###### a"));
+	test("h7 doesnt exist", false, [node("p", "####### a")], () => to_tree("####### a"));
+	test("heading with id", false, [add_property(node("h1", "a"), {id : "a"})], () => to_tree("# a #a"));
+	test("ruby with no reading becomes text node", false, [node("p", no, node("text", "a"))], () => to_tree("{a}"));
+	
+	test("single reading ruby", false, [
+		node("p", no, 
+			node("ruby", no,
+				add_property(node("text", "a"), {rt : node("text", "b")})
+			)
+		)
+	], () => to_tree("{a(b)}"));
+
+	test("multi ruby", false, [
+		node("p", no, 
+			node("ruby", no,
+				add_property(node("text", "a"), {rt : node("text", "b")}),
+				add_property(node("text", "c"), {rt : node("text", "d")}),
+			)
+		)
+	], () => to_tree("{a(b)c(d)}"));
+
+	test("ruby incomplete pair is ignored", false, [
+		node("p", no, 
+			node("ruby", no,
+				add_property(node("text", "a"), {rt : node("text", "b")})
+			)
+		)
+	], () => to_tree("{a(b)c}"));
+
+	test("blockquote", false, [node("blockquote", no, node("p", "a"))], () => to_tree(">a"));
+	
+	test("nested blockquote", false, [node("blockquote", no, 
+		node("p", "1"), 
+		node("blockquote", no, node("p", "2")),
+		node("p", "1"))
+	], () => to_tree([">1",">>2",">1"], no, false));
+	
+	test("ul", false, [
+		node("ul", false, node("li", "a"), node("li", "a"))
+	], () => to_tree(["- a", "- a"], no, false));
+	
+	test("ol start=value", false, [
+		node("ol", "42", node("li", "a"), node("li", "a"))
+	], () => to_tree(["42. a", "43. a"], no, false));
+	
+	test("indented under list item is in the list item", false, [
+		node("ul", false, add_property(node("li", "a"), {under_element : [node("p", "a")]}))
+	], () => to_tree(["- a", "\ta"], no, false));
+	
+	test("nested list", false, [
+		node("ul", false, add_property(node("li", "a"), {under_element : [node("ul", false, node("li", "a"))]}))
+	], () => to_tree(["- a", "\t- a"], no, false));
+	
+	test("task list with checked box", false, [
+		node("ul", false, add_property(node("li", "a"), {checkbox : "checked"}))
+	], () => to_tree("- [x]a"));
+	
+	test("task list with indeterminate box", false, [
+		node("ul", false, add_property(node("li", "a"), {checkbox : "indeterminate"}))
+	], () => to_tree("- [-]a"));
+	
+	test("task list with empty box", false, [
+		node("ul", false, add_property(node("li", "a"), {checkbox : undefined}))
+	], () => to_tree("- [ ]a"));
+	
+	test("definition list", false, [
+		node("dl", no, 
+			node("dt", "a"),
+			node("dd", "a"),
+			node("dd", "a"),
+			node("dt", "a")
+		)
+	], () => to_tree(["/a", ": a", ": a", "/a"], no, false));
+
+	test("horizontal rule", false, [node("hr")], () => to_tree("-------"));
+	test("link", false, [node("p", no, add_property(node("a", "a"), { link : "b", hover : no }))], () => to_tree("[a](b)"));
+
+	test("auto link", false, [node("p", no, 
+		add_property(node("a", "https://a"), { link : "https://a" }))
+	], () => to_tree("https://a"));
+
+	test("img with no alt text is not img", false, [node("p", "![](a)")], () => to_tree("![](a)"));
+
+	test("img", false, [node("p", no, add_property(node("img"), {
+		alt : "alt",
+		src : "src",
+		hover : undefined,
+		width : undefined,
+		height : undefined,
+		link : undefined,
+	}))], () => to_tree("![alt](src)"));
+
+	test("img with width and height", false, [node("p", no, add_property(node("img"), {
+		alt : "alt",
+		src : "src",
+		hover : undefined,
+		width : "3",
+		height : "4",
+		link : undefined,
+	}))], () => to_tree("![alt](src){3x4}"));
+
+	test("img with width and no height", false, [node("p", no, add_property(node("img"), {
+		alt : "alt",
+		src : "src",
+		hover : undefined,
+		width : "3",
+		height : undefined,
+		link : undefined,
+	}))], () => to_tree("![alt](src){3}"));
+
+	test("img with height and no width", false, [node("p", no, add_property(node("img"), {
+		alt : "alt",
+		src : "src",
+		hover : undefined,
+		width : undefined,
+		height : "4",
+		link : undefined,
+	}))], () => to_tree("![alt](src){x4}"));
+	
+	test("img with height and no width, with figcaption", false, [node("p", no, add_property(node("img"), {
+		alt : "alt",
+		src : "src",
+		hover : no,
+		width : no,
+		height : "4",
+		figcaption : node("figcaption", "caption"),
+		link : no,
+	}))], () => to_tree("![alt](src){x4 \"caption\"}")); 
+
+	test("escape format", false, [node("p", "*b*")], () => to_tree("\\*b*"));
+	test("escape link", false, [node("p", "https://a")], () => to_tree("\\https://a"));
+
+	test("table with single cell in tbody", false, [add_property(node("table", no,
+		node("tr", no, 
+			add_property(node("td", "a"), { align : "center" })
+		)
+	),{
+		thead : [],
+		tfoot : [],
+	})], () => to_tree("|a|"));
+
+	test("table with single header cell in tbody", false, [add_property(node("table", no,
+		node("tr", no, 
+			add_property(node("th", "a"), { align : "center" })
+		)
+	),{
+		thead : [],
+		tfoot : [],
+	})], () => to_tree("|#a|"));
+
+	test("table with single header cell in tbody", false, [add_property(node("table", no,
+		node("tr", no, 
+			add_property(node("th", "a"), { align : "center" })
+		)
+	),{
+		thead : [],
+		tfoot : [],
+	})], () => to_tree("|#a|"));
+
+	test("table with single header cell which is left aligned in tbody", false, [add_property(node("table", no,
+		node("tr", no, 
+			add_property(node("th", "a"), { align : "left" })
+		)
+	),{
+		thead : [],
+		tfoot : [],
+	})], () => to_tree("|:<#a|"));
+
+	test("table with single header cell which is right aligned in tbody", false, [add_property(node("table", no,
+		node("tr", no, 
+			add_property(node("th", "a"), { align : "right" })
+		)
+	),{
+		thead : [],
+		tfoot : [],
+	})], () => to_tree("|#a>:|"));
+
+	test("table with single header cell which is right aligned in thead", false, [add_property(node("table", no,), {
+		thead : [node("tr", no, add_property(node("th", "a"), { align : "right" }))],
+		tfoot : [],
+	})], () => to_tree("|#a>:|#"));
+
+	test("table with single header cell which is right aligned in tfoot", false, [add_property(node("table", no,), {
+		thead : [],
+		tfoot : [node("tr", no, add_property(node("th", "a"), { align : "right" }))],
+	})], () => to_tree("|#a>:|<-"));
+
+	test("table with multiple cells and row in tbody", false, [add_property(node("table", no,
+		node("tr", no, 
+			add_property(node("td", "a"), { align : "left" }),
+			add_property(node("th", "b"), { align : "center" }),
+		),
+		node("tr", no,
+			add_property(node("td", "c"), { align : "right" }),
+			add_property(node("td", "d"), { align : "center" }),
+		)
+	),{
+		thead : [],
+		tfoot : [],
+	})], () => to_tree(["|:<a|#b|", "|c>:|d|"], no, false));
+
+	test("table caption", false, [add_property(node("table", no,
+		node("tr", no, 
+			add_property(node("td", "a"), { align : "center" })
+		)
+	),{
+		thead : [],
+		tfoot : [],
+		caption : node("caption", "b")
+	})], () => to_tree(["|a|", "^b"], no, false));
+
+	test("table with merged cells", false, [add_property(node("table", no,
+		node("tr", no, 
+			add_property(node("td", "0"), { align : "center", colspan : "1", rowspan : "2"}),
+			add_property(node("td", "1"), { align : "center" }),
+			add_property(node("td", "2"), { align : "center" }),
+			add_property(node("td", "3"), { align : "center" }),
+		),
+		node("tr", no,
+			add_property(node("td", "4"), { align : "center", colspan : "2", rowspan : "1"}),
+			add_property(node("td", "5"), { align : "center" }),
+		),
+		node("tr", no, 
+			add_property(node("td", "6"), { align : "center"}),
+			add_property(node("td", "7"), { align : "center", colspan : "3", rowspan : "2"}),
+		),
+		node("tr", no, 
+			add_property(node("td", "8"), { align : "center"}),
+		),
+		node("tr", no, 
+			add_property(node("td", "9"), { align : "center", colspan : "4", rowspan : "1"}),
+		),
+	),{
+		thead : [],
+		tfoot : [],
+	})], () => to_tree(["|{x2}0|1|2|3|", "|{2}4|5|", "|6|{3x2}7|", "|8|", "|{4}9|"], no, false));
+
+	test("table rows in tbody, thead and tfoot", false, [add_property(node("table", no,
+		node("tr", no, 
+			add_property(node("td", "b"), { align : "center" }),
+		),
+	),{
+		thead : [node("tr", no, add_property(node("td", "a"), { align : "center" }))],
+		tfoot : [node("tr", no, add_property(node("td", "c"), { align : "center" }))],
+	})], () => to_tree(["|a|#","|b|","|c|<-"], no, false));
+
+	test("footnote with without display text", false, [
+		node("p", no, add_property(node("note", "a"), { id : "a" }))
+	], () => to_tree("[^a]"));
+
+	test("footnote with with display text", false, [
+		node("p", no, add_property(node("note", "b"), { id : "a" }))
+	], () => to_tree("[^a \"b\"]"));
+
+	test("footnote description without display text", false, [
+		add_property(node("note_desc", no, 
+			node("text", "a: "),
+			node("text", "c")
+		), { id : "a" })
+	], () => to_tree("[^a]: c"));
+
+	test("footnote description with display text", false, [
+		add_property(node("note_desc", no, 
+			node("text", "b: "),
+			node("text", "c")
+		), { id : "a" })
+	], () => to_tree("[^a \"b\"]: c"));
+
+	test("footnote description nest", false, [
+		add_property(node("note_desc", no, 
+			node("text", "a: "),
+			node("text", "b")
+		), { id : "a", under_element : [node("p", "c")] })
+	], () => to_tree(["[^a]: b", "\tc"], no, false));
+
+	test("code block", false, [node("codeblock", "a\nb\nc")], () => to_tree(["```","a","b","c"], no, false));
+
+	test("code block ends correctly", false, [
+		node("codeblock", "a"),
+		node("p","b")
+	], () => to_tree(["```","a","```","b"], no, false));
+
+	test("varblock is not in output", false, [], () => to_tree("~~~"));
+
+	test("variables are created in varblock", false, {a : node("text", "1")}, () => {
+		let variables = {};
+		to_tree(["~~~", "%a% = 1"], variables, false);
+		return variables;
+	});
+
+	test("variables can be other controls", false, {a : node("text", no, node("em", "1"))}, () => {
+		let variables = {};
+		to_tree(["~~~", "%a% = *1*"], variables, false);
+		return variables;
+	});
+
+	test("variables are usable", false, [
+		node("p", no, node("text", "b"))
+	], () => to_tree(["~~~", "%a% = b", "~~~", "%a%"], no, false));
+</script>

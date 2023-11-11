@@ -265,6 +265,8 @@ export const to_tree = (str, variables = {}, split = true) =>
 	let previous_p_node;
 
 	const arr_length = arr.length;
+
+	process_line:
 	for (let i = 0; i < arr_length;)
 	{
 		let line = arr[i];
@@ -385,14 +387,19 @@ export const to_tree = (str, variables = {}, split = true) =>
 					while (++j < arr_length && !(arr[j] == arr[i]));
 
 					let part = arr.slice(i + 1, j);
+					i = j + 1;
 
 					if (type == "codeblock") node.value = part.join("\n");
 					else
+					{
 						for (const part_line of part)
 							if (regex_match_result = part_line.match(VARBLOCK_SETVAR))
 								variables[regex_match_result[1]] = parse_optimize_node(regex_match_result[2], undefined, variables);
 
-					i = j + 1;
+						continue process_line;
+					}
+
+
 					break check_match_strings;
 				case "blockquote":
 					let lines = [regex_match_result[1]];
