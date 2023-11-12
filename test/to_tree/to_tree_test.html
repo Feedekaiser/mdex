@@ -350,4 +350,100 @@
 	test("variables are usable", false, [
 		node("p", no, node("text", "b"))
 	], () => to_tree(["~~~", "%a% = b", "~~~", "%a%"], no, false));
+
+	test("math 1 + 1 = 2", false, [
+		node("p", no, add_property(node("math"), { tokens : [
+				["1", "mn"],
+				["+", "mo"],
+				["1", "mn"],
+				["=", "mo"],
+				["2", "mn"],
+			]	
+		}))
+	], () => to_tree("@1+1=2@"));
+
+	test("math space is ignored", false, [
+		node("p", no, add_property(node("math"), { tokens : [
+				["1", "mn"],
+				["+", "mo"],
+				["1", "mn"],
+				["=", "mo"],
+				["2", "mn"],
+			]	
+		}))
+	], () => to_tree("@1   +   1 =        2@"));
+
+	test("math text", false, [
+		node("p", no, add_property(node("math"), { tokens : [
+				["1", "mn"],
+				["+", "mo"],
+				["1", "mn"],
+				["=", "mo"],
+				["​text​", "mtext"],
+				["2", "mn"],
+			]	
+		}))
+	], () => to_tree("@1   +   1 = &text&       2 @"));
+
+	test("math asterisk multiply becomes interpunct", false, [
+		node("p", no, add_property(node("math"), { tokens : [
+				["2", "mn"],
+				["·", "mo"],
+				["4", "mn"],
+			]	
+		}))
+	], () => to_tree("@2*4@"));
+
+	test("math numbers are grouped together", false, [
+		node("p", no, add_property(node("math"), { tokens : [
+				["16","mn"],
+				["·", "mo"],
+				["4", "mn"],
+			]	
+		}))
+	], () => to_tree("@16*4@"));
+
+	test("math function names are grouped together but random english words arent", false, [
+		node("p", no, add_property(node("math"), { tokens : [
+				["sin", "mi"],
+				[",", "mo"],
+				["cos", "mi"],
+				[",", "mo"],
+				["a", "mi"],
+				["b", "mi"],
+				["c", "mi"],
+			]	
+		}))
+	], () => to_tree("@sin,cos,abc@"));
+
+	test("math ((x^(n+1)) * 4)/(root(2^2, 4))", false, [
+		node("p", no, add_property(node("math"), { tokens : [
+				["frac", "mi"],
+				["(", "mo", 24],
+					["pow", "mi"],
+					["(", "mo", 9],
+						["x", "mi"], // 4
+						[",", "mo"],
+						["n", "mi"],
+						["+", "mo"],
+						["1", "mn"], // 8
+					[")", "mo", 3],
+					["·", "mo"],
+					["4", "mn"],
+				[",", "mo"], // 12
+					["root", "mi"],
+					["(", "mo", 23],
+					["pow", "mi"],
+					["(", "mo", 20], // 16
+						["2", "mn"],
+						[",", "mo"],
+						["2", "mn"],
+					[")", "mo", 16], // 20
+					[",", "mo"],
+						["4", "mn"],
+					[")", "mo", 14],
+				[")", "mo", 1], // 24
+			]	
+		}))
+	], () => to_tree("@frac(pow(x,n+1)*4,root(pow(2,2),4))@"));
 </script>

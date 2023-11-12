@@ -720,10 +720,10 @@ const math_parse = {}; {
 				switch (c)
 				{
 				case 0x26: // '&'
-					++i; tokens.push([`​${check_and_build((cc) => cc != 0x26)} ​`, "mtext"]); ++i; // zwsp at the end and start to make html render the space (if any) at end and start
+					++i; tokens.push([`​${check_and_build((cc) => cc != 0x26)}​`, "mtext"]); ++i; // zwsp at the end and start to make html render the space (if any) at end and start
 					break;
 				case 0x2A: // '*'
-					tokens.push(["·", "mi"]);
+					tokens.push(["·", "mo"]);
 				case 0x20: // space
 					++i; break;
 				// '0', '1', ..., '9'
@@ -755,6 +755,10 @@ const math_parse = {}; {
 							tokens.push([character, "mi"]);
 	
 					break;
+				case 0x3C0: case 0x3B1: case 0x3B2: case 0x3B3: case 0x3B4: case 0x3B5:
+				case 0x3B6: case 0x3B8: case 0x3BB: case 0x3BC: case 0x3BD: case 0x3C1:
+				case 0x3C3: case 0x3C4: case 0x3A9: case 0x394:
+					tokens.push([str[i++], "mi"]); break;
 				default:
 					tokens.push([str[i++], "mo"]);
 				}
