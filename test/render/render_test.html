@@ -1,0 +1,58 @@
+<script type="module">
+	import {to_tree, render} from "/mdex.js";
+	import {test} from "../test_func.js";
+
+	const parse = (str) => 
+	{
+		let div = document.createElement("div");
+		div.replaceChildren(...render(to_tree(str)));
+		return () => div.innerHTML;
+	}
+
+
+	// this is supposed to be tested AFTER to_tree is tested. if to_tree doesnt work, then whether this work doesn't matter.
+
+	test("paragraph", false, "<p>a</p>", parse("a"));
+	test("para with br", false, "<p>a<br>b</p>", parse("a\nb"));
+	test("multi para", false, "<p>a</p><p>b</p>", parse("a\n\nb"));
+	test("h1", false, "<h1>a</h1>", parse("# a"));
+	test("h1 with heading", false, `<h1 id="b">a</h1>`, parse("# a #b"));
+	test("h2", false, "<h2>a</h2>", parse("## a"));
+	test("h3", false, "<h3>a</h3>", parse("### a"));
+	test("h4 with heading", false, `<h4 id="b">a</h4>`, parse("#### a #b"));
+	test("controls", false, `<p><em>a</em><strong>b</strong></p>`, parse("*a*^b^"));
+	test("words after controls exists", false, `<p><em>a</em><strong>b</strong>c</p>`, parse("*a*^b^c"));
+	test("nested controls", false, `<p><u>a<strong>b<em>c<del>d</del>c</em>b</strong>a</u></p>`, parse("_a^b*c~d~c*b^a_"))
+	test("ruby", false, `<p><ruby>a<rp>(</rp><rt>b</rt><rp>)</rp>c<rp>(</rp><rt>d</rt><rp>)</rp></ruby></p>`, parse("{a(b)c(d)}"));
+	test("emoji", false, `<p>👍🤣</p>`, parse(":+1::rofl:"));
+	test("emoji as text if doesnt exist", false, `<p>:○:</p>`, parse(":○:"));
+	test("emoji has control", false, `<p>:<em>○</em>:</p>`, parse(":*○*:"));
+	test("blockquote", false, `<blockquote><p>a</p></blockquote>`, parse(">a"));
+	test("nested blockquote", false, `<blockquote><p>a</p><blockquote><p>b</p></blockquote><p>c</p></blockquote>`, parse(">a\n>>b\n>c"));
+	test("nested blockquote with jumping levels", false, `<blockquote><blockquote><blockquote><p>a</p><blockquote><blockquote><p>b</p></blockquote></blockquote></blockquote></blockquote><p>c</p></blockquote>`, parse(">>>a\n>>>>>b\n>c"))
+	test("ul", false, `<ul><li>a</li><li>b</li></ul>`, parse("- a\n- b"));
+	test("ol", false, `<ol><li>a</li><li>b</li></ol>`, parse("1. a\n2. b"));
+	test("ol with start", false, `<ol start="7"><li>a</li><li>b</li></ol>`, parse("7. a\n2. b"));
+	test("ol/ul/dl under element", false, `<ul><li>a<ul><li>b</li></ul></li></ul>`, parse("- a\n\t- b"));
+
+
+	// state cannot be tested because the outerHTML of checkboxes does not include checked unless it is set through setAttribute?
+	// just confirm visually
+	test("task list", false, `<ul><li><input type="checkbox" disabled="">a</li></ul>`, parse("- [x]a"));
+
+
+	test("dl", false, `<dl><dt>a</dt><dd>b</dd></dl>`, parse("/a\n: b"));
+	test("hr", false, `<hr>`, parse("---"));
+	test("link", false, `<p><a href="b" title="c">a</a></p>`, parse(`[a](b "c")`));
+	test("img", false, `<p><img src="b" alt="a" title="c" width="3" height="9"><figcaption>d</figcaption></p>`, parse(`![a](b "c"){3x9 "d"}`));
+	
+	test("table", false, `<table><thead><tr><td align="center" rowspan="2" colspan="1">1</td><td align="center">2</td><td align="center">3</td></tr></thead><tbody><tr><th align="center" rowspan="1" colspan="2">5</th></tr><tr><td align="center">7</td><td align="center" rowspan="2" colspan="2">8</td></tr></tbody><tfoot><tr><td align="center">10</td></tr></tfoot></table>`, parse(
+`|{x2} 1 | 2 | 3 |#
+|#{2} 5          |
+| 7     |{2x2} 8 |
+| 10    |<-`));
+
+	test("footnote", false, `<p><sup><a href="#_note:a">a</a></sup></p>`, parse("[^a]"));
+	test("footnote display text", false, `<p><sup><a href="#_note:a">b</a></sup></p>`, parse(`[^a "b"]`));
+	test("math", false, `<p><math><mfrac><mrow><msup><mi>x</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msup><mo>·</mo><mn>4</mn></mrow><mroot><msup><mn>2</mn><mn>2</mn></msup><mn>4</mn></mroot></mfrac></math></p>`, parse(`@frac(pow(x,n+1)*4,root(pow(2,2),4))@`));
+</script>

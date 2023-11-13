@@ -298,6 +298,8 @@ export const to_tree = (str, variables = {}, split = true) =>
 
 					if (under_element.length > 0)
 						node.under_element = to_tree(under_element, variables, false);
+
+					return node;
 				};
 
 				switch (type)
@@ -375,10 +377,11 @@ export const to_tree = (str, variables = {}, split = true) =>
 				case "dl":
 					do
 					{
+						++i;
 						node.children.push(parse_optimize_node(regex_match_result[1], tree_node("dt"), variables));
-
-						while (++i < arr_length && (regex_match_result = arr[i].match(DL_DD)))
-							node.children.push(parse_optimize_node(regex_match_result[1], tree_node("dd"), variables));
+						
+						while (i < arr_length && (regex_match_result = arr[i].match(DL_DD)))
+							node.children.push(under_element_nest(parse_optimize_node(regex_match_result[1], tree_node("dd"), variables)));
 					} while (i < arr_length && (regex_match_result = arr[i].match(match_string)));
 					break check_match_strings;
 				case "varblock":
@@ -563,11 +566,11 @@ const inner_render_node = (node, parent) =>
 
 		switch(type)
 		{
+		case "dd":
 		case "note_desc":
 		case "li":
 			if (node.under_element)
-				create_element_and_append("div", append_text_to).replaceChildren(...render(node.under_element));
-			break;
+				append_text_to.append(...render(node.under_element));
 		}
 		break;
 	case "note":
