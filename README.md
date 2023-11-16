@@ -1,6 +1,8 @@
 # mdex.js - Markdown Parser
 
-**mdex.js** is a lightweight and <ruby>*kind of* performant<rt>slightly faster than [marked.js](https://github.com/markedjs/marked)</rt></ruby> JavaScript module for parsing Markdown and converting it into HTML, *loosely* adhering to the specifications mentioned [here](https://www.markdownguide.org/).
+**mdex.js** is a lightweight and <ruby>*kind of* performant<rt>slightly faster than [marked.js](https://github.com/markedjs/marked)</rt></ruby> JavaScript module for parsing Markdown and converting it into HTML, *loosely* adhering to the specifications mentioned [here](https://www.markdownguide.org/).  
+
+Try the demo [here](https://feedekaiser.github.io/mdex/).
 
 ## Features
 
