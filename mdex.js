@@ -5,6 +5,7 @@ const tree_node = (type, value) =>
 	return { type : type, value: value, children : [] };
 }
 
+const MATH_NAMEPSPACE = "http://www.w3.org/1998/Math/MathML";
 const EMPTY_ARR = []; // do NOT touch this. it should always have 0 elements.
 const EMPTY_STRING = "";
 const NOTE_ID_PREFIX = "_note:";
@@ -48,6 +49,7 @@ const LINE_MATCH_STRINGS = {
 	note_desc  : /^\[\^(.+?)\s*(?:"(.+)")?\]:\s(.+)/,
 	codeblock  : /^`{3,}$/,
 	varblock   : /^~{3}$/,
+	graphblock : /^!{3}(\w+)/,
 	table      : /^\|(.+)\|/,
 };
 
@@ -67,6 +69,7 @@ const CHAR_TO_LINE_REGEX_MAP = {};
 	map('[', "note_desc");
 	map('`', "codeblock");
 	map('~', "varblock");
+	map('!', "graphblock");
 	map('|', "table");
 }
 
@@ -384,26 +387,29 @@ export const to_tree = (str, variables = {}, split = true) =>
 							node.children.push(under_element_nest(parse_optimize_node(regex_match_result[1], tree_node("dd"), variables)));
 					} while (i < arr_length && (regex_match_result = arr[i].match(match_string)));
 					break check_match_strings;
-				case "varblock":
 				case "codeblock":
+				case "varblock":
+				case "graphblock":
 					let j = i;
 					while (++j < arr_length && !(arr[j] == arr[i]));
 
 					let part = arr.slice(i + 1, j);
 					i = j + 1;
 
-					if (type == "codeblock") node.value = part.join("\n");
-					else
+					switch (type)
 					{
+					case "codeblock":
+						node.value = part.join("\n"); break check_match_strings;
+					case "varblock":
 						for (const part_line of part)
 							if (regex_match_result = part_line.match(VARBLOCK_SETVAR))
 								variables[regex_match_result[1]] = parse_optimize_node(regex_match_result[2], undefined, variables);
 
 						continue process_line;
+					case "graphblock":
+						node = graph_parse.parse(regex_match_result[1], part);
+						break check_match_strings;
 					}
-
-
-					break check_match_strings;
 				case "blockquote":
 					let lines = [regex_match_result[1]];
 					while (++i < arr_length && (regex_match_result = arr[i].match(match_string)))
@@ -564,7 +570,7 @@ const inner_render_node = (node, parent) =>
 	default:
 		inner_render_node_default(node, append_text_to);
 
-		switch(type)
+		switch (type)
 		{
 		case "dd":
 		case "note_desc":
@@ -591,7 +597,7 @@ const inner_render_node = (node, parent) =>
 		}
 		break;
 	case "math":
-		let math = document.createElementNS("http://www.w3.org/1998/Math/MathML", "math");
+		let math = document.createElementNS(MATH_NAMEPSPACE, "math");
 		math.appendChild(math_parse.render(node.tokens));
 		parent.appendChild(math);
 		break;
@@ -687,6 +693,26 @@ export const render = (tree) =>
 	return children_nodes.arr;
 };
 
+const graph_parse = {}; {
+	/** 
+	 * @param {string} mode
+	 * @param {Array} str
+	 */
+	graph_parse.parse = (mode, str) => 
+	{
+		switch (mode.toLowerCase())
+		{
+		case "xyplot":
+			let horizontal = false; // mode
+			let legends = [];
+		
+		
+		default:
+			
+		}
+	};
+}
+
 
 const math_parse = {}; {
 	const MATH_FUNCTIONS = {abs:1,and:1,arccos:1,arcsin:1,arctan:1,C:1,ceil:1,cot:1,cos:1,cosh:1,csc:1,deg:1,exp:1,fact:1,floor:1,frac:"mfrac",if:1,int:1,lim:1,log:1,ln:1,max:1,min:1,or:1,over:"mover",P:1,pow:"msup",prod:1,rad:1,root:"mroot",round:1,sec:1,sgn:1,sign:1,sin:1,sinh:1,sqrt:"msqrt",sum:1,sub:"msub",subsup:"msubsup",tan:1,tanh:1,under:"munder",underover:"munderover"};
@@ -702,6 +728,9 @@ const math_parse = {}; {
 		subsup : 3,
 	};
 
+	/** 
+	 * @param {string} str
+	 */
 	math_parse.lex = (str) =>
 	{
 		let str_length = str.length;
@@ -782,7 +811,7 @@ const math_parse = {}; {
 
 	const create_math_element_and_push = (type, arr) =>
 	{
-		let element = document.createElementNS("http://www.w3.org/1998/Math/MathML", type);
+		let element = document.createElementNS(MATH_NAMEPSPACE, type);
 		arr.push(element);
 		return element;
 	};
@@ -829,7 +858,7 @@ const math_parse = {}; {
 		if (children.length == 1) return children[0];
 
 
-		let mrow = document.createElementNS("http://www.w3.org/1998/Math/MathML", "mrow");
+		let mrow = document.createElementNS(MATH_NAMEPSPACE, "mrow");
 		mrow.replaceChildren(...children);
 		return mrow;
 	};
